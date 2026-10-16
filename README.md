@@ -18,7 +18,7 @@ Windows／Mac 新手版。仓库名称为 `szu-uooc`，旧版界面也会显示�
 
 - Windows 10/11 x64 或 Mac（Intel／Apple 芯片），使用 Google Chrome。
 - 首次启动自动下载 Node.js 与浏览器连接组件，后续启动复用。
-- 图文教程以 Windows 截图为例，已标注 Mac 的解压、启动与快捷键操作。
+- 图文教程以 Windows 截图为例，已标注 Mac 操作。
 - 个人配置位于本机用户目录，不包含在发布包中。
 
 ## 来源与许可
