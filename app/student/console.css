@@ -5,3 +5,4 @@
 ::selection{background:#dce6ff;color:var(--ink)}input,textarea{caret-color:var(--accent)}a{text-underline-offset:3px}.done-icon{color:var(--green);display:grid;place-items:center;width:60px}dialog{scrollbar-color:#c8d1e0 transparent}
 
 @media(max-width:650px){.toolbar{position:sticky;top:0;z-index:4;background:var(--ground);padding:18px 0;margin-top:-18px}}
+.course-name .course-error{color:var(--danger)}

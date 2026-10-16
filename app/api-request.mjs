@@ -4,6 +4,10 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
 const nanos = (usd) => Math.ceil(usd * 1e9);
+const resumableFailure = entry => [200, 502].includes(entry.http_status) || (
+  entry.http_status == null && entry.failure_stage === 'connecting'
+  && ['TimeoutError', 'AbortError', 'TypeError'].includes(entry.failure_type)
+);
 
 export function validPrices(pricing) {
   const values = ['input_per_million', 'cached_input_per_million', 'output_per_million'].map((key) => pricing?.[key]);
@@ -106,7 +110,7 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
     if (typeof ledger.model !== 'string' || !ledger.model || !Array.isArray(ledger.requests)) throw new Error('账本结构异常，须先核对已有费用');
     // Rejected requests retain their full reservation when an explicit corrected attempt is sent.
     const resumableRejection = (entry) => entry.status === 'unknown' && (
-      entry.http_status === 429 || ([200, 502].includes(entry.http_status) && resumedUnknown.has(courseId + ':' + entry.id)) || (entry.http_status === 400 && entry.provider_error?.type === 'invalid_request_error'
+      entry.http_status === 429 || (resumableFailure(entry) && resumedUnknown.has(courseId + ':' + entry.id)) || (entry.http_status === 400 && entry.provider_error?.type === 'invalid_request_error'
         && /^Unsupported (?:parameter|tool type): [a-z0-9_.-]+$/i.test(entry.provider_error.message || ''))
     );
     const unresolved = ledger.requests.find((entry) => entry.status !== 'known' && !resumableRejection(entry));
@@ -121,7 +125,7 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
     if (!Number.isSafeInteger(spent) || spent < 0 || spent + reserve > nanos(limit)) throw new Error('本地预算不足，已阻止付费请求');
     // Legacy entries inherit ledger.model; keep their original costs and record model changes per request.
     const entry = { id: randomUUID(), at: new Date().toISOString(), model: config.model, status: 'pending', reserved_nanos: reserve, pricing: config.pricing, input_bound: inputBound, output_bound: payload.max_output_tokens };
-    const recovered = ledger.requests.filter(item => item.status === 'unknown' && [200, 502].includes(item.http_status) && resumedUnknown.has(courseId + ':' + item.id));
+    const recovered = ledger.requests.filter(item => item.status === 'unknown' && resumableFailure(item) && resumedUnknown.has(courseId + ':' + item.id));
     if (recovered.length) entry.resumed_unknown_requests = recovered.map(item => item.id);
     ledger.requests.push(entry);
     await save(file, ledger);
@@ -173,7 +177,7 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
       // Provider responses and request headers can contain credentials; retain no raw errors.
       const status = entry.http_status ? `HTTP ${entry.http_status}；` : '';
       const reason = entry.provider_error ? `${entry.provider_error.reason}；` : '';
-      const failure = new Error(entry.status === 'known' ? `API ${status}${reason}未返回可用答案；已记录 usage，课程暂停` : `API ${status}${reason}结果或费用未知；保留预留额度，课程暂停，${[200, 502].includes(entry.http_status) ? '可点击继续在剩余预算内重试' : '禁止自动重试'}`);
+      const failure = new Error(entry.status === 'known' ? `API ${status}${reason}未返回可用答案；已记录 usage，课程暂停` : `API ${status}${reason}结果或费用未知；保留预留额度，课程暂停，${resumableFailure(entry) ? '可点击重试在剩余预算内继续' : '禁止自动重试'}`);
       if (entry.http_status === 429 && ['请求频率限制', '并发限制'].includes(entry.provider_error?.reason)
         && (entry.retry_after_seconds === undefined || entry.retry_after_seconds <= 60)) failure.retryAfterMs = (entry.retry_after_seconds ?? 15) * 1000;
       throw failure;
@@ -202,7 +206,7 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
     settled.then(() => { if (requestQueues.get(scope) === settled) requestQueues.delete(scope); });
     return call;
   };
-  // A manual start/resume covers only recorded unknown 200/502s; new failures still stop the course.
+  // Explicit retry keeps prior reservations; newly interrupted requests still stop the course.
   api.prepareResume = async courseId => {
     if (!/^\d+$/.test(String(courseId))) throw new Error('无法核实恢复请求所属课程');
     await pending;
@@ -211,7 +215,7 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
     catch (error) { if (error.code === 'ENOENT') return; throw new Error('账本不可读，已阻止恢复请求'); }
     if (!Array.isArray(ledger.requests)) throw new Error('账本结构异常，已阻止恢复请求');
     for (const entry of ledger.requests) {
-      if (entry.status === 'unknown' && [200, 502].includes(entry.http_status) && typeof entry.id === 'string' && entry.id) resumedUnknown.add(courseId + ':' + entry.id);
+      if (entry.status === 'unknown' && resumableFailure(entry) && typeof entry.id === 'string' && entry.id) resumedUnknown.add(courseId + ':' + entry.id);
     }
   };
   api.idle = () => pending;
