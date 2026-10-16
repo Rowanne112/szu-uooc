@@ -4,7 +4,7 @@ Windows／Mac 新手版。仓库名称为 `szu-uooc`，旧版界面也会显示�
 
 ## 下载与启动
 
-1. 打开 [最新下载](https://github.com/zcx28/szu-uooc/releases/latest)，下载 `ShenYiShua-Windows.zip`（Windows、Mac 共用）。
+1. 打开 [最新下载](https://github.com/zcx28/szu-uooc/releases/latest)，下载 `ShenYiShua.zip`（Windows、Mac 共用）。
 2. Windows：右键 ZIP →“全部解压”；Mac：双击 ZIP 解压。打开解压后的文件夹。
 3. Windows 双击 `启动-Windows.cmd`；Mac 双击 `启动-Mac.command`。保持联网，等待自动下载组件并打开控制台。
 4. 按控制台提示登录 UOOC，在 Chrome 开启远程调试并允许本次连接。
