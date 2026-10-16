@@ -21,11 +21,12 @@ export function validateCourseURL(value) {
 }
 
 export function validateConfig(config) {
+  if (!['ai', 'free'].includes(config.answer_mode ?? 'ai')) throw new Error('请选择 AI 解题或免费答题。');
   let url;
   try { url = new URL(config.base_url); } catch { throw new Error('请输入完整的解题服务接口地址。'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('接口地址需要是 HTTPS 地址，不能带 Key 或其他参数。');
   if (typeof config.model !== 'string' || !/^[a-zA-Z0-9._:/-]{1,120}$/.test(config.model) || config.reasoning_effort !== 'medium' || config.wire_api !== 'responses') throw new Error('请填写支持 Responses 接口和 medium 推理的模型名称。');
-  if (typeof config.api_key !== 'string' || !config.api_key.trim() || /\s/.test(config.api_key) || config.api_key.length > 2048) throw new Error('Key 不能为空，也不能包含空格或换行。');
+  if (typeof config.api_key !== 'string' || (config.answer_mode !== 'free' && !config.api_key.trim()) || /\s/.test(config.api_key) || config.api_key.length > 2048) throw new Error('AI 解题的 Key 不能为空，也不能包含空格或换行。');
   if (typeof config.budget !== 'number' || !Number.isFinite(config.budget) || config.budget <= 0 || config.budget > 1) throw new Error('每门课预算应大于 0 且不超过 $1.00。');
   validPrices(config.pricing);
   return config;

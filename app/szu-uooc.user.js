@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.21
+// @version      0.10.0-local.22
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.21';
+  const SCRIPT_VERSION = '0.10.0-local.22';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -85,6 +85,7 @@
     aiOutputPrice: '',
     aiBudget: 1,
     aiOutputTokens: 500,
+    courseAnswerMode: 'ai',
   });
   const AI_MAX_CONCURRENCY = 10;
   const AI_VISION_MAX_CONCURRENCY = 5;
@@ -3999,7 +4000,8 @@
       });
       if (missing.length) {
         assertQuizBinding(task, questions);
-        const generated = await requestCourseAIAnswers(missing, c, runId);
+        const free = state.config.courseAnswerMode === 'free';
+        const generated = free ? new Map(missing.map(item => [item.index, randomCourseAnswer(item)])) : await requestCourseAIAnswers(missing, c, runId);
         if (!c.active || c.runId !== runId) return;
         if (!await refreshBinding()) return;
         const staged = [];
@@ -4008,10 +4010,10 @@
           if (!answer) throw new Error('AI未返回全部缺失题答案');
           const target = quiz[item.index];
           validateCourseAnswer(target.question, answer);
-          target.answer = { answers: answer, source: 'AI' };
+          target.answer = { answers: answer, source: free ? 'random' : 'AI' };
           staged.push(target);
         }
-        for (const target of staged) localStorage.setItem(courseCacheKey(c.courseId, target.question), JSON.stringify(target.answer));
+        if (!free) for (const target of staged) localStorage.setItem(courseCacheKey(c.courseId, target.question), JSON.stringify(target.answer));
       } else if (!await refreshBinding()) return;
       if (!await applyAnswers()) return;
       if (typeof vmScope.vm.commitTask !== 'function') throw new Error('找不到原生提交入口；请返回课程目录后重试');
@@ -4087,6 +4089,15 @@
       }
     } catch (error) { if (c.active && c.runId === runId) { pauseCourseWithError(error.message || String(error)); } }
     finally { if (c.runId === runId) c.quizSolving = false; }
+  }
+
+  function randomCourseAnswer(question) {
+    const type = canonicalQuestionType(question.type);
+    if (!['single', 'multiple'].includes(type)) throw new Error('免费模式缺少填空或其他题型的答案，请手动完成此测验后继续。');
+    const options = question.options.map(option => option.text);
+    if (!options.length) throw new Error('当前题目没有可选答案，请手动处理。');
+    const selected = type === 'multiple' ? options.filter(() => Math.random() < 0.5) : [];
+    return selected.length ? selected : [options[Math.floor(Math.random() * options.length)]];
   }
 
   function validateCourseAnswer(question, answers) {

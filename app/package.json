@@ -1,6 +1,6 @@
 {
   "name": "szu-uooc-student",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "description": "szu-uooc portable student launcher",
   "dependencies": { "playwright": "1.62.1" }

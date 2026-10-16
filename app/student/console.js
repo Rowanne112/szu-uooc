@@ -50,7 +50,7 @@ function renderGuide() {
     else html = `<h2>${browser.status === 'connecting' ? '在 Chrome 弹窗中点「允许」' : '连接 Chrome'}</h2><input id="debug-url" aria-label="Chrome 调试页地址" readonly value="chrome://inspect/#remote-debugging"><p class="guide-note">在 Chrome 地址栏粘贴并回车，再开启该页开关。</p><div class="guide-visual"><span>Chrome</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg><strong>Allow remote debugging</strong><span class="switch" aria-hidden="true"></span></div><div class="guide-actions"><button class="button secondary" data-copy-debug>复制调试页地址</button><button class="button primary" data-connect>${browser.status === 'connecting' ? '等待允许…' : '已开启，连接 Chrome'}</button></div><p class="guide-note">Chrome 弹窗会请求控制浏览器，以读取课程并打开学习页。</p>`;
   } else if (browser.catalog === 'error') html = '<h2>重新打开我的课程</h2><div class="guide-actions"><button class="button primary" data-browser-open="site">打开 UOOC</button><button class="button secondary" data-read-courses>已登录，读取课程</button></div>';
   else if (!state.courses.length) html = '<h2>把所有课程放进来</h2><div class="guide-actions"><button class="button primary" data-read-courses>读取我的课程</button><button class="button secondary" data-browser-open="site">打开我的课程</button></div><p class="guide-note"><button class="text-button" data-open="add">或批量粘贴课程网址</button></p>';
-  else if (!state.config.hasKey) html = '<h2>填入解题 Key</h2><button class="button primary" data-open="settings">设置解题服务</button>';
+  else if (!state.config.hasKey && state.config.answer_mode !== 'free') html = '<h2>选择答题方式</h2><p class="guide-note">不填 Key 也能开始。免费模式优先题库，缺题随机作答并自动提交，可能答错；缺答案的填空题需人工处理。</p><div class="guide-actions"><button class="button primary" data-free-mode>先不填，免费开始</button><button class="button secondary" data-open="settings">设置解题服务</button></div>';
   $('#onboarding').hidden = !html;
   updateHTML('#guide-content', html ? `<div class="guide-body">${html}</div>` : '');
   $('#guide-error').textContent = guideError || browser.error || state.configError || '';
@@ -60,13 +60,13 @@ function render() {
   state.activeIds ||= state.activeId ? [state.activeId] : [];
   renderGuide();
   $('#courses-section').hidden = !state.courses.length;
-  $('#service-label').textContent = state.config.hasKey ? state.config.model : '未设置';
+  $('#service-label').textContent = state.config.answer_mode === 'free' ? '免费模式' : state.config.hasKey ? state.config.model : '未设置';
   $('#checkin-summary').textContent = state.checkin?.settings.enabled ? '已开启' : '未开启';
   $('#browser-summary').textContent = state.browser?.status === 'connected' ? '已连接' : '未连接';
   $('#stop-all').disabled = busy || !state.activeIds.length;
   updateHTML('#course-list', state.courses.map(course => {
     const awaiting = course.status === 'running' && course.phase === 'awaiting_verification' && state.activeIds.includes(course.id);
-    const canStart = state.config.hasKey && state.environment.status === 'ready' && state.browser?.status === 'connected';
+    const canStart = (state.config.hasKey || state.config.answer_mode === 'free') && state.environment.status === 'ready' && state.browser?.status === 'connected';
     const control = !canStart && !state.activeIds.includes(course.id) ? '' : buttons(course);
     return `<article class="course-row" data-id="${esc(course.id)}"><div class="course-name"><h3>${esc(course.name)}</h3><p>${esc(course.currentTitle || (course.status === 'ready' ? '整门课程' : course.phaseLabel || course.statusLabel))}</p>${course.error ? `<p class="course-error" role="status">${esc(course.error)}</p>` : ''}</div><div class="course-progress"><div class="course-status ${esc(awaiting ? course.phase : course.status)}"><span>${esc(awaiting ? '待验证' : course.statusLabel)}</span><span>${course.total ? `${Number(course.completed) || 0} / ${Number(course.total)}` : '—'}</span></div>${progress(course)}</div><div class="course-buttons">${control}<details class="course-menu"><summary aria-label="${esc(course.name)}更多操作"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary><div>${state.activeIds.includes(course.id) ? `<button data-course="${esc(course.id)}" data-action="focus">切到课程</button>` : `<a href="${esc(course.url)}" target="_blank" rel="noopener noreferrer">打开课程</a>`}<button data-edit-course="${esc(course.id)}">课程与签到</button>${state.activeIds.includes(course.id) ? `<button data-course="${esc(course.id)}" data-action="stop">停止学习</button>` : `<button data-course="${esc(course.id)}" data-action="remove">移出列表</button>`}<span class="field-help">费用 ${money(course.costs.spent)}${course.costs.reserved ? ' · 预留 ' + money(course.costs.reserved) : ''}${course.costs.unknown ? ' · 待核对' : ''}</span></div></details></div></article>`;
   }).join(''));
@@ -101,10 +101,13 @@ async function runAction(fn) {
   finally { busy = false; if (state && !closed) render(); }
 }
 function settingsValues() {
-  return { api_key: $('#api-key').value.trim(), base_url: $('#base-url').value.trim(), model: $('#model').value.trim(), budget: Number($('#budget').value), pricing: { input_per_million: Number($('#price-input').value), cached_input_per_million: Number($('#price-cache').value), output_per_million: Number($('#price-output').value) } };
+  return { answer_mode: $('#answer-mode').value, api_key: $('#api-key').value.trim(), base_url: $('#base-url').value.trim(), model: $('#model').value.trim(), budget: Number($('#budget').value), pricing: { input_per_million: Number($('#price-input').value), cached_input_per_million: Number($('#price-cache').value), output_per_million: Number($('#price-output').value) } };
 }
 function updatePrices() {
   const values = settingsValues();
+  const free = values.answer_mode === 'free';
+  $('#ai-settings').hidden = free; $('#free-mode-note').hidden = !free; $('#test-connection').hidden = free;
+  $('#ai-settings').querySelectorAll('input').forEach(input => input.disabled = free);
   $('#price-summary').textContent = `每百万 token：输入 $${values.pricing.input_per_million} · 缓存 $${values.pricing.cached_input_per_million} · 输出 $${values.pricing.output_per_million}；每门课预算 $${values.budget}。`;
   try { $('#provider-summary').textContent = new URL(values.base_url).hostname; } catch { $('#provider-summary').textContent = '自定义服务'; }
   $('#model-summary').textContent = values.model;
@@ -120,6 +123,7 @@ function openDialog(name) {
   if (name === 'settings') {
     if (!state) { toast('控制台正在连接，请稍候。'); return; }
     const config = state.config;
+    $('#answer-mode').value = config.answer_mode || 'ai';
     $('#api-key').value = ''; $('#api-key').type = 'password'; $('#show-key').textContent = '显示';
     $('#api-key').placeholder = config.hasKey ? '已保存，留空保留原 Key' : '粘贴你的 Key';
     $('#base-url').value = config.base_url; $('#model').value = config.model; $('#budget').value = config.budget;
@@ -184,6 +188,7 @@ $('#settings-form').addEventListener('submit', event => {
   runAction(async () => { try { await api('/api/config', settingsValues()); $('#api-key').value = ''; $('#settings-dialog').close(); toast('解题服务设置已保存。'); } catch (error) { $('#settings-error').textContent = error.message; } finally { button.disabled = false; } });
 });
 $('#settings-form').addEventListener('input', updatePrices);
+$('#answer-mode').addEventListener('change', updatePrices);
 $('#show-key').addEventListener('click', () => { const field = $('#api-key'); field.type = field.type === 'password' ? 'text' : 'password'; $('#show-key').textContent = field.type === 'password' ? '显示' : '隐藏'; $('#show-key').setAttribute('aria-label', field.type === 'password' ? '显示输入的 Key' : '隐藏输入的 Key'); });
 $('#test-connection').addEventListener('click', () => runAction(async () => {
   $('#test-connection').disabled = true; $('#test-result').textContent = '正在检查 Key 和模型列表，不发送解题请求…';
@@ -200,6 +205,7 @@ document.addEventListener('click', async event => {
     catch { toast('请复制已选中的地址，粘贴到 Chrome 地址栏。'); }
   }
   const step = event.target.closest('[data-guide-step]'); if (step) { guideStep = step.dataset.guideStep; guideError = ''; render(); }
+  if (event.target.closest('[data-free-mode]')) runAction(() => api('/api/config', { answer_mode: 'free' }));
   const open = event.target.closest('[data-browser-open]'); if (open) runAction(async () => { await api('/api/browser-open', { target: open.dataset.browserOpen }); });
   const connect = event.target.closest('[data-connect]'); if (connect) runAction(async () => { guideError = ''; try { await api('/api/browser-connect'); await api('/api/browser-courses'); } catch (error) { guideError = error.message; } });
   const read = event.target.closest('[data-read-courses]'); if (read) runAction(async () => { guideError = ''; read.textContent = '读取中…'; try { const result = await api('/api/browser-courses'); toast(`已加入 ${result.added} 门课程`); } catch (error) { guideError = error.message; toast(error.message, true); } finally { read.textContent = '刷新课程'; } });

@@ -44,12 +44,13 @@ export async function installCourseScript(target, { config, bank, script, expect
     const text = await page.locator('#szu-uooc-course-state').textContent({ timeout: 2000 });
     const state = JSON.parse(text);
     if (String(state.courseId) !== expectedCourse || !state.active || state.phase !== 'solving') throw new Error('当前课程范围内没有等待解题的任务');
+    if (config.answer_mode === 'free') throw new Error('免费模式不会调用解题服务。');
     try { return await requestAPI(state.courseId, details, async () => {
       const current = JSON.parse(await page.locator('#szu-uooc-course-state').textContent().catch(() => 'null'));
       return current?.active && current.phase === 'solving' && String(current.courseId) === expectedCourse && current.sourceId === state.sourceId;
     }); } catch (error) {
       if (error.notSent) return { status: 0, notSent: true, error: '课程已暂停，未发送解题请求' };
-      const message = String(error.message || '本地控制器已暂停请求').replaceAll(config.api_key, '[redacted]');
+      const message = String(error.message || '本地控制器已暂停请求').replaceAll(config.api_key || '\0', '[redacted]');
       console.log(message); throw new Error(message);
     }
   });
@@ -72,7 +73,7 @@ if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.on
     let prior = {}; try { prior = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) {}
     delete prior.aiApiKey;
     localStorage.setItem(key, JSON.stringify({ ...prior, enabled: false, autoPlay: false, autoNext: false, aiBaseUrl: ${JSON.stringify(config.base_url)}, aiModel: ${JSON.stringify(config.model)}, aiTimeout: 90000,
-      aiInputPrice: ${JSON.stringify(config.pricing?.input_per_million ?? '')}, aiCachedInputPrice: ${JSON.stringify(config.pricing?.cached_input_per_million ?? '')}, aiOutputPrice: ${JSON.stringify(config.pricing?.output_per_million ?? '')}, aiBudget: ${JSON.stringify(config.budget)}, aiOutputTokens: 2048 }));
+      aiInputPrice: ${JSON.stringify(config.pricing?.input_per_million ?? '')}, aiCachedInputPrice: ${JSON.stringify(config.pricing?.cached_input_per_million ?? '')}, aiOutputPrice: ${JSON.stringify(config.pricing?.output_per_million ?? '')}, aiBudget: ${JSON.stringify(config.budget)}, aiOutputTokens: 2048, courseAnswerMode: ${JSON.stringify(config.answer_mode || 'ai')} }));
     ${script}
     ${consoleMode ? "const hide = () => { const style = document.createElement('style'); style.textContent = '#szu-uooc-auto-player-controls{display:none!important}'; document.head.appendChild(style); }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hide, {once:true}); else hide();" : ''}
   })();

@@ -55,7 +55,7 @@ const bank = await fs.readFile(path.join(here, 'data/answers.json'), 'utf8');
 if (!Array.isArray(JSON.parse(bank).questions)) throw new Error('答案库结构无效');
 const script = await fs.readFile(path.join(here, 'szu-uooc.user.js'), 'utf8');
 const requestAPI = createAPI(config, path.join(privateDir, 'ledger'), options.fetchAPI || fetch);
-if (consoleMode && !['pause', 'stop'].includes(requestedCommand)) await requestAPI.prepareResume(expectedCourse);
+if (config.answer_mode !== 'free' && consoleMode && !['pause', 'stop'].includes(requestedCommand)) await requestAPI.prepareResume(expectedCourse);
 report('连接已登录的 Chrome。请先在 chrome://inspect/#remote-debugging 开启调试，并在 Chrome 提示中批准本次连接。');
 const cdpEndpoint = process.env.SZU_UOOC_CDP_ENDPOINT || 'chrome';
 if (cdpEndpoint !== 'chrome' && !['127.0.0.1', 'localhost'].includes(new URL(cdpEndpoint).hostname)) throw new Error('调试连接仅允许本机浏览器。');
@@ -149,7 +149,7 @@ page.once('close', stop);
 uninstall = await installCourseScript(page, { config, bank, script, expectedCourse, requestAPI, consoleMode });
 if (requestedCommand === 'stop') { await stop(); return; }
 
-page.on('pageerror', (error) => report('页面脚本错误：' + error.message.replaceAll(config.api_key, '[redacted]').slice(0, 240)));
+page.on('pageerror', (error) => report('页面脚本错误：' + error.message.replaceAll(config.api_key || '\0', '[redacted]').slice(0, 240)));
 const verificationLoads = [];
 page.on('requestfailed', (request) => {
   const failed = new URL(request.url());
@@ -197,7 +197,7 @@ let reportedState;
 const emitState = state => { reportedState = { ...state }; if (options.onState) options.onState({ type: 'state', state, title }); else if (consoleMode && process.connected) process.send({ type: 'state', state, title }); };
 let commandQueue = Promise.resolve();
 handleCommand = action => {
-  if (action === 'stop') { stop().catch(error => report('操作未完成：' + error.message.replaceAll(config.api_key, '[已隐藏]'))); return; }
+  if (action === 'stop') { stop().catch(error => report('操作未完成：' + error.message.replaceAll(config.api_key || '\0', '[已隐藏]'))); return; }
   commandQueue = commandQueue.then(async () => {
     if (stopping) return;
     if (action === 'focus') {
@@ -214,13 +214,13 @@ handleCommand = action => {
       if (stopping) return;
       const state = JSON.parse(text); state.error = '用户暂停'; emitState(state);
     } else if (action === 'resume') {
-      await requestAPI.prepareResume(expectedCourse);
+      if (config.answer_mode !== 'free') await requestAPI.prepareResume(expectedCourse);
       if (stopping) return;
       await page.locator('[data-action="course-start"]').evaluate(node => node.click());
       const state = JSON.parse(await page.locator('#szu-uooc-course-state').textContent());
       if (!stopping) emitState(state);
     }
-  }).catch(error => report('操作未完成：' + error.message.replaceAll(config.api_key, '[已隐藏]')));
+  }).catch(error => report('操作未完成：' + error.message.replaceAll(config.api_key || '\0', '[已隐藏]')));
 };
 if (requestedCommand) handleCommand(requestedCommand);
 
@@ -284,7 +284,7 @@ try {
               if (clicked) report('已点击原生验证控件；继续等待网站确认。若出现额外挑战，请在 Chrome 接管。');
             } catch (error) {
               verificationAttempted = ''; verificationRetryAt = Date.now() + 5000;
-              if (!stopping) report('原生验证点击未完成，5秒后重试：' + String(error.message || error).replaceAll(config.api_key, '[已隐藏]'));
+              if (!stopping) report('原生验证点击未完成，5秒后重试：' + String(error.message || error).replaceAll(config.api_key || '\0', '[已隐藏]'));
             }
           }
         }

@@ -20,7 +20,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   let configError = '';
   try { config = await readJSON(configFile, null); }
   catch { configError = '原来的设置不可读，请在控制台重新保存 Key。'; config = null; }
-  if (config) { try { validateConfig(config); } catch (error) { configError = error.message; config = null; } }
+  if (config) { try { validateConfig(config); config = { answer_mode: 'ai', ...config }; } catch (error) { configError = error.message; config = null; } }
   const saved = await readJSON(queueFile, { courses: [] });
   const courses = Array.isArray(saved.courses) ? saved.courses : [];
   for (const course of courses) {
@@ -121,7 +121,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
     if (active.has(course.id)) throw new Error('这门课程已经在运行。');
     if (active.size) throw new Error('先停止当前课程，再开始另一门。');
     if (environment.status !== 'ready') throw new Error('请等运行环境准备完成后再开始。');
-    if (!config) throw new Error('先在「解题服务设置」里保存你的 Key。');
+    if (!config) throw new Error('请先选择免费答题，或在解题服务设置里保存 Key。');
     validateConfig(config);
     validateCourseURL(course.url);
     course.status = 'starting'; course.error = ''; course.phase = 'connecting';
@@ -206,7 +206,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   }
 
   function nextConfig(body) {
-    return validateConfig({ base_url: body.base_url ?? config?.base_url ?? defaults.base_url, model: body.model ?? config?.model ?? defaults.model,
+    return validateConfig({ answer_mode: body.answer_mode ?? config?.answer_mode ?? 'ai', base_url: body.base_url ?? config?.base_url ?? defaults.base_url, model: body.model ?? config?.model ?? defaults.model,
       wire_api: 'responses', reasoning_effort: 'medium', budget: body.budget ?? config?.budget ?? defaults.budget,
       pricing: body.pricing ?? config?.pricing ?? structuredClone(defaults.pricing), api_key: body.api_key || config?.api_key || '' });
   }
@@ -250,6 +250,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
     }
     if (route === '/api/test-connection') {
       const settings = nextConfig(body);
+      if (settings.answer_mode === 'free') throw new Error('免费模式不使用解题服务，无需测试连接。');
       const tested = { status: 'testing', message: '正在测试连接' };
       const savedMatch = config && JSON.stringify(settings) === JSON.stringify(config);
       if (savedMatch) Object.assign(connection, tested);
