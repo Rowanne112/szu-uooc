@@ -1,0 +1,8 @@
+{
+  "node": "24.21.0",
+  "playwright": "1.62.1",
+  "answers": 1135,
+  "dependencies_bundled": false,
+  "node_source": "https://nodejs.org/dist/v24.21.0/",
+  "npm_source": "https://registry.npmjs.org/"
+}
