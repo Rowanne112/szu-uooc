@@ -190,6 +190,7 @@ try {
 let started = false;
 let lastState = '';
 let verificationAttempted = '';
+let verificationRetryAt = 0;
 let lastActivity = Date.now();
 const title = await page.evaluate(() => document.body.innerText.split('\n').map(text => text.trim()).find(Boolean) || document.title);
 let reportedState;
@@ -257,8 +258,8 @@ try {
       if (state.phase === 'complete') break;
     }
     if (changed && state.phase === 'loading_catalog') verificationAttempted = '';
-    const verificationRun = `${state.courseId}:${state.sourceId}:${state.runId}`;
-    if (state.active && state.phase === 'awaiting_verification' && verificationAttempted !== verificationRun) {
+    const verificationRun = `${state.courseId}:${state.sourceId}:${state.runId}:${state.verificationAttempt}`;
+    if (state.active && state.phase === 'awaiting_verification' && verificationAttempted !== verificationRun && Date.now() >= verificationRetryAt) {
       const frames = page.frames().filter((frame) => {
         const location = new URL(frame.url());
         return location.origin === new URL(page.url()).origin && location.protocol === 'https:' && allowedHost(location.hostname) && location.pathname === state.quizUrl;
@@ -275,11 +276,16 @@ try {
               await page.bringToFront();
               return clickVerificationControl(page, frame, async () => {
                 const current = JSON.parse(await page.locator('#szu-uooc-course-state').textContent());
-                return !stopping && current.active && current.phase === 'awaiting_verification' && current.sourceId === state.sourceId && current.courseId === state.courseId && current.runId === state.runId && current.quizUrl === state.quizUrl;
+                return !stopping && current.active && current.phase === 'awaiting_verification' && current.sourceId === state.sourceId && current.courseId === state.courseId && current.runId === state.runId && current.quizUrl === state.quizUrl && current.verificationAttempt === state.verificationAttempt;
               });
             };
-            const clicked = options.verify ? await options.verify(click, { page, state }) : await click();
-            if (clicked) report('已点击原生验证控件；继续等待网站确认。若出现额外挑战，请在 Chrome 接管。');
+            try {
+              const clicked = options.verify ? await options.verify(click, { page, state }) : await click();
+              if (clicked) report('已点击原生验证控件；继续等待网站确认。若出现额外挑战，请在 Chrome 接管。');
+            } catch (error) {
+              verificationAttempted = ''; verificationRetryAt = Date.now() + 5000;
+              if (!stopping) report('原生验证点击未完成，5秒后重试：' + String(error.message || error).replaceAll(config.api_key, '[已隐藏]'));
+            }
           }
         }
       }

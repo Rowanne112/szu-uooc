@@ -25,13 +25,15 @@ export async function clickVerificationControl(page, frame, beforeClick) {
     return r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight && (hit === node || node.contains(hit));
   });
   if (!visible) throw new Error('验证控件被裁剪或遮挡，未发送点击');
+  await checkbox.click({ trial: true, timeout: 5000 });
   // Like drissionpage-ai's adapter, use viewport coordinates for native input.
   // Playwright boundingBox already includes iframe offsets; do not add them again.
   const box = await checkbox.boundingBox();
   const size = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   if (!box || box.x < 0 || box.y < 0 || box.x + box.width > size.width || box.y + box.height > size.height) throw new Error('验证控件不在课程视口内，未发送点击');
   if (beforeClick && !await beforeClick()) return false;
-  await checkbox.click({ timeout: 5000, delay: 120 });
+  // Native input must not wait for a target to reappear after the cancellation check.
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   return true;
 }
 

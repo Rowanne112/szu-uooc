@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.20
+// @version      0.10.0-local.21
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.20';
+  const SCRIPT_VERSION = '0.10.0-local.21';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -3678,7 +3678,7 @@
   function coursePublicState() {
     const c = state.course;
     return { courseId: c.courseId || getCourseId(), sourceId: c.sourceId, runId: c.runId, phase: c.phase, active: c.active,
-      error: c.error, total: c.total, completed: c.completed, lockedUnits: state.catalogLocked.size, currentTitle: c.currentTitle, quizUrl: c.quizUrl };
+      error: c.error, total: c.total, completed: c.completed, lockedUnits: state.catalogLocked.size, currentTitle: c.currentTitle, quizUrl: c.quizUrl, verificationAttempt: c.verificationAttempt || 0 };
   }
 
   function publishCourseState(requireSaved = false) {
@@ -3980,6 +3980,17 @@
         quiz.forEach((item, i) => item.live = fresh[i]);
         return true;
       };
+      const applyAnswers = async () => {
+        for (const item of quiz) {
+          if (!c.active || c.runId !== runId || getCourseId() !== c.courseId) return false;
+          assertQuizBinding(task, questions);
+          await applyKnownAnswer(item.live, item.answer);
+        }
+        if (!c.active || c.runId !== runId) return false;
+        assertQuizBinding(task, questions);
+        if (questions.some((live) => !live.question.checked || !Array.isArray(live.question.student_answer) || !live.question.student_answer.length)) throw new Error('仍有题目没有同步到试卷答案模型');
+        return true;
+      };
       const missing = [];
       quiz.forEach((item, index) => {
         if (!c.active || c.runId !== runId || getCourseId() !== c.courseId) throw new Error('自动课程已取消');
@@ -4002,20 +4013,14 @@
         }
         for (const target of staged) localStorage.setItem(courseCacheKey(c.courseId, target.question), JSON.stringify(target.answer));
       } else if (!await refreshBinding()) return;
-      for (const item of quiz) {
-        if (!c.active || c.runId !== runId || getCourseId() !== c.courseId) return;
-        assertQuizBinding(task, questions);
-        await applyKnownAnswer(item.live, item.answer);
-      }
-      if (!c.active || c.runId !== runId) return;
-      assertQuizBinding(task, questions);
-      if (questions.some((live) => !live.question.checked || !Array.isArray(live.question.student_answer) || !live.question.student_answer.length)) throw new Error('仍有题目没有同步到试卷答案模型');
+      if (!await applyAnswers()) return;
       if (typeof vmScope.vm.commitTask !== 'function') throw new Error('找不到原生提交入口；请返回课程目录后重试');
-      c.phase = 'awaiting_verification'; c.commitOpened = true; publishCourseState();
+      c.phase = 'awaiting_verification'; c.commitOpened = true;
       vmScope.vm.commitTask();
-      const openedAt = Date.now(), deadline = openedAt + 1800000;
+      c.verificationAttempt = (c.verificationAttempt || 0) + 1; publishCourseState();
+      let openedAt = Date.now(), retryAt = 0, retryDelay = 5000, submittedAt = 0;
       let nextReview = 0;
-      while (c.active && c.runId === runId && Date.now() < deadline) {
+      while (c.active && c.runId === runId) {
         const currentQuestions = collectLiveQuestions(task);
         if (!c.submitClicked && !currentQuestions.length && !quizDocumentMatchesTask(questions[0].container.ownerDocument, task)) throw new Error('当前验证回调与章节测验任务不匹配，已暂停');
         if (currentQuestions.length) {
@@ -4027,7 +4032,30 @@
           vmScope = currentVm;
         }
         const frameDoc = (currentQuestions[0] || questions[0]).container.ownerDocument;
-        if (!c.submitClicked && !vmScope.vcode_params?.captchaVerifyParam && /验证失败/.test(frameDoc.querySelector('#commitConfirmDialog #sc')?.textContent || '')) throw new Error('网站验证失败，请在课程窗口按提示刷新后继续');
+        if (!c.submitClicked && !vmScope.vcode_params?.captchaVerifyParam && /验证失败/.test(frameDoc.querySelector('#commitConfirmDialog #sc')?.textContent || '') && !retryAt) {
+          retryAt = Date.now() + retryDelay;
+          c.error = '网站验证失败，' + retryDelay / 1000 + '秒后自动重试'; publishCourseState();
+          retryDelay = Math.min(30000, retryDelay * 2);
+        }
+        if (retryAt && !c.submitClicked && !vmScope.vcode_params?.captchaVerifyParam && Date.now() >= retryAt) {
+          if (!await refreshBinding()) return;
+          if (!c.active || c.runId !== runId || getCourseId() !== c.courseId || String(c.sourceId) !== String(task.id)) return;
+          // A human may have completed verification while the live question binding was refreshed.
+          if (vmScope.vcode_params?.captchaVerifyParam) { retryAt = 0; continue; }
+          if (!await applyAnswers()) return;
+          const answeredQuestions = questions;
+          if (!await refreshBinding()) return;
+          if (vmScope.vcode_params?.captchaVerifyParam) { retryAt = 0; continue; }
+          if (questions.some((live, i) => live.question !== answeredQuestions[i].question || live.container !== answeredQuestions[i].container)) { await sleep(500); continue; }
+          const doc = questions[0].container.ownerDocument;
+          const cancel = doc.querySelector('#commitConfirmDialog [ng-click="vm.cancelCommitTask()"],#commitConfirmDialog [data-action=cancel],#commitConfirmDialog .layui-layer-btn1');
+          if (cancel) cancel.click();
+          if (!c.active || c.runId !== runId) return;
+          vmScope.vm.commitTask();
+          openedAt = Date.now(); retryAt = 0; c.error = '';
+          c.verificationAttempt += 1; publishCourseState();
+          await sleep(500); continue;
+        }
         const buttons = Array.from(frameDoc.querySelectorAll('#commitConfirmDialog button,[lay-filter*=commit]'));
         const confirm = frameDoc.querySelector('#commitConfirmDialog [ng-click="vm.doCommitTask()"]') || buttons.find((button) => /确认提交|确定提交/.test(button.textContent || ''));
         if (confirm?.getClientRects().length && !confirm.disabled && vmScope.vcode_params && vmScope.vcode_params.captchaVerifyParam && !c.submitClicked) {
@@ -4035,7 +4063,7 @@
           c.pendingSubmit = { courseId: c.courseId, sourceId: String(task.id), task_id: String(task.source.task_id || task.id), at: Date.now() };
           persistCourseState(true);
           if (!c.active || c.runId !== runId) return;
-          c.submitClicked = true; c.phase = 'submitting'; publishCourseState(); confirm.click();
+          c.submitClicked = true; submittedAt = Date.now(); retryAt = 0; c.error = ''; c.phase = 'submitting'; publishCourseState(); confirm.click();
         }
         const successDialog = Array.from(frameDoc.querySelectorAll('.layui-layer-content,[role=dialog]')).find((node) => /测验通过，可以继续后面的学习/.test(node.textContent || ''));
         if (successDialog && !c.successClicked) {
@@ -4053,10 +4081,10 @@
           c.completed += 1; c.index += 1; c.quizSolving = false; c.commitOpened = false; c.submitClicked = false; c.successClicked = false; persistCourseState();
           c.phase = 'loading_catalog'; publishCourseState(); return courseRefreshAndAdvance(runId);
         }
-        if (!c.submitClicked && !vmScope.vcode_params?.captchaVerifyParam && !confirm?.getClientRects().length && !successDialog && Date.now() - openedAt > 3000) throw new Error('验证弹窗已关闭，点击继续重新打开');
+        if (!c.submitClicked && !retryAt && !vmScope.vcode_params?.captchaVerifyParam && !confirm?.getClientRects().length && !successDialog && Date.now() - openedAt > 3000) throw new Error('验证弹窗已关闭，点击继续重新打开');
+        if (c.submitClicked && Date.now() - submittedAt > 1800000) throw new Error('等待测验完成超时');
         await sleep(500);
       }
-      if (c.active && c.runId === runId) { c.active = false; c.phase = 'paused'; c.error = '等待真实验证或测验完成超时'; publishCourseState(); }
     } catch (error) { if (c.active && c.runId === runId) { pauseCourseWithError(error.message || String(error)); } }
     finally { if (c.runId === runId) c.quizSolving = false; }
   }
