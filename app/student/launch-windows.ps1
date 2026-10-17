@@ -17,7 +17,7 @@ try {
     }
     throw '控制台启动超时，请检查电脑和网络后重新启动。'
 } catch {
-    Write-Host ('启动未完成：' + $_.Exception.Message)
-    if ($errors -and (Test-Path $errors)) { Get-Content -Encoding UTF8 $errors | Select-Object -Last 5 | Write-Host }
+    if ($output) { try { Add-Content -Encoding UTF8 $output $_.Exception.Message } catch {} }
+    Write-Host '请重新下载并完整解压安装包，再双击「启动-Windows.cmd」。仍不能打开时，把程序文件夹里的 runtime/launch 开头的日志文件发给帮你安装的人；不要删除已有设置和费用记录。'
     exit 1
 }

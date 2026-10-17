@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.22
+// @version      0.10.0-local.23
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.22';
+  const SCRIPT_VERSION = '0.10.0-local.23';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -72,6 +72,9 @@
     aiBaseUrl: '',
     aiApiKey: '',
     aiModel: 'gpt-6-luna',
+    aiManaged: false,
+    aiServiceReady: false,
+    aiVisionModel: '',
     aiTimeout: 45000,
     discussionCount: 1,
     discussionUnlimited: false,
@@ -1140,11 +1143,16 @@
     const ownerDocument = element.ownerDocument || document;
     const originalImages = images ? Array.from(element.querySelectorAll('img')) : [];
     clone.querySelectorAll('script,style,input,button,textarea,select').forEach((node) => node.remove());
+    clone.querySelectorAll('svg,canvas,object,embed').forEach(node => {
+      const label = imagePrefix + '未支持图像';
+      if (images) images.push({ label, url: '' });
+      node.replaceWith(ownerDocument.createTextNode('[' + label + ']'));
+    });
     clone.querySelectorAll('br').forEach((node) => node.replaceWith(ownerDocument.createTextNode('\n')));
     clone.querySelectorAll('img').forEach((image, index) => {
       if (images) {
         const original = originalImages[index];
-        const source = original && (original.currentSrc || original.getAttribute('src') || original.getAttribute('data-src')) || '';
+        const source = original && (original.getAttribute('data-src') || original.currentSrc || original.getAttribute('src')) || '';
         const label = imagePrefix + (index + 1);
         let url = '';
         try { if (source) url = new URL(source, ownerDocument.baseURI).href; } catch (_) {}
@@ -1193,6 +1201,7 @@
         const images = [];
         return {
           label: optionLabel,
+          node: label,
           text: textFromElement(label.querySelector('.ti-a-c') || label, images, '选项' + optionLabel + '图片'),
           images,
         };
@@ -2115,6 +2124,7 @@
   }
 
   function requestQuizImageBlob(url) {
+    if (state.config.aiManaged && typeof window.szuUoocImage === 'function') return window.szuUoocImage(url).then(image => new Blob([Uint8Array.from(atob(image.base64), c => c.charCodeAt(0))], { type: image.type }));
     if (typeof GM_xmlhttpRequest !== 'function') {
       return Promise.reject(new Error('脚本管理器不支持读取跨域题目图片'));
     }
@@ -3709,10 +3719,13 @@
   }
 
   function courseCacheKey(courseId, q) {
-    return COURSE_CACHE_KEY + courseId + ':' + JSON.stringify([normalizedAnswerText(q.question), String(q.type), (q.options || []).map((o) => normalizedAnswerText(o.text)).sort(), Number(q.blankCount) || 0]);
+    const images = [...(q.images || []), ...(q.options || []).flatMap(o => o.images || [])].map(i => [i.label, i.url]);
+    return COURSE_CACHE_KEY + courseId + ':' + JSON.stringify([normalizedAnswerText(q.question), String(q.type), (q.options || []).map((o) => normalizedAnswerText(o.text)).sort(), Number(q.blankCount) || 0, ...(images.length ? [images] : [])]);
   }
 
   function bankAnswer(courseId, q) {
+    // Image URLs can serve changing content; do not reuse text-only bank/cache matches.
+    if ((q.images || []).length || (q.options || []).some(o => o.images?.length)) return null;
     let bank;
     try { bank = JSON.parse(state.config.answerBank || (typeof GM_getValue === 'function' && GM_getValue('szu-uooc:answer-bank', '')) || '{"questions":[]}'); } catch (_) { throw new Error('答案库JSON格式错误'); }
     if (!bank || !Array.isArray(bank.questions)) throw new Error('请在AI设置的题库框导入正确答案JSON');
@@ -3764,7 +3777,7 @@
         const question = qscope && qscope.question;
         const dom = extractQuizQuestionsFromDocument(doc).find((q) => q.element === container);
         if (!question || !dom) return null;
-        return { container, question, win, text: dom.question, options: dom.options, type: String(question.type) };
+        return { container, question, win, text: dom.question, images: dom.images, options: dom.options, type: String(question.type) };
       }).filter(Boolean);
       if (list.length) return list;
     }
@@ -3811,13 +3824,19 @@
     });
     const optionArray = Array.isArray(q.options) ? q.options : [];
     const expectedKeys = selectedOptions.map((pick) => {
-      const matches = optionArray.filter((item) => normalizedAnswerText(typeof item === 'string' ? item : discussionHtmlToText(item.text)) === normalizedAnswerText(pick.text));
+      const matches = optionArray.filter((item) => {
+        if (!pick.images?.length) return normalizedAnswerText(typeof item === 'string' ? item : discussionHtmlToText(item.text)) === normalizedAnswerText(pick.text);
+        const template = live.container.ownerDocument.createElement('template');
+        template.innerHTML = typeof item === 'string' ? item : item.text;
+        const urls = [...template.content.querySelectorAll('img')].map(img => { try { return new URL(img.getAttribute('data-src') || img.getAttribute('src'), live.container.ownerDocument.baseURI).href; } catch { return ''; } });
+        return JSON.stringify(urls) === JSON.stringify(pick.images.map(img => img.url)) && normalizedAnswerText(textFromElement(template.content, [], '选项' + pick.label + '图片')) === normalizedAnswerText(pick.text);
+      });
       if (matches.length !== 1) throw new Error('找不到唯一的原生选项ID');
       return String(typeof matches[0] === 'string' ? optionArray.indexOf(matches[0]) : matches[0].key);
     }).sort();
     const nodes = Array.from(live.container.querySelectorAll('.ti-a'));
     for (const node of nodes) {
-      const text = normalizedAnswerText(textFromElement(node.querySelector('.ti-a-c') || node));
+      const text = normalizedAnswerText(live.options.find(option => option.node === node)?.text);
       const input = node.querySelector('input[type=checkbox],input[type=radio]');
       if (!input) throw new Error('原生选项控件缺失');
       const shouldBeChecked = answers.includes(text);
@@ -3828,7 +3847,7 @@
       const input = node.querySelector('input[type=checkbox],input[type=radio]');
       return input && input.checked;
     });
-    if (actualSelected.length !== answers.length || actualSelected.some((node) => !answers.includes(normalizedAnswerText(textFromElement(node.querySelector('.ti-a-c') || node))))) throw new Error('原生选项勾选结果与答案不一致');
+    if (actualSelected.length !== answers.length || actualSelected.some((node) => !answers.includes(normalizedAnswerText(live.options.find(option => option.node === node)?.text)))) throw new Error('原生选项勾选结果与答案不一致');
     const scope = findQuestionScope(live.container, live.win).scope;
     if (scope.$applyAsync) scope.$applyAsync();
     await sleep(0);
@@ -3960,7 +3979,7 @@
       for (let i = 0; vmScope && i < 12 && !vmScope.vm; i += 1) vmScope = vmScope.$parent;
       if (!vmScope || !vmScope.vm || !vmScope.vm.task) throw new Error('无法确认测验任务类型，已暂停；请返回课程目录后重试');
       if (String(vmScope.vm.task.type) !== '10') throw new Error('该页面不是章节测验（task.type=' + String(vmScope.vm.task.type) + '）；作业和期末考试不会自动作答或提交');
-      const questionOf = live => ({ question: live.text, type: live.type, options: live.options, blankCount: live.type === '30' ? live.container.querySelectorAll('textarea').length : 0 });
+      const questionOf = live => ({ question: live.text, images: live.images, type: live.type, options: live.options, blankCount: live.type === '30' ? live.container.querySelectorAll('textarea').length : 0 });
       const quiz = questions.map((live) => ({
         live,
         question: questionOf(live),
@@ -4001,6 +4020,7 @@
       if (missing.length) {
         assertQuizBinding(task, questions);
         const free = state.config.courseAnswerMode === 'free';
+        if (free && missing.some(q => q.images?.length || q.options.some(o => o.images?.length))) throw new Error('图片题不可用：免费模式不识图，请手动完成图片题后继续。');
         const generated = free ? new Map(missing.map(item => [item.index, randomCourseAnswer(item)])) : await requestCourseAIAnswers(missing, c, runId);
         if (!c.active || c.runId !== runId) return;
         if (!await refreshBinding()) return;
@@ -4013,7 +4033,7 @@
           target.answer = { answers: answer, source: free ? 'random' : 'AI' };
           staged.push(target);
         }
-        if (!free) for (const target of staged) localStorage.setItem(courseCacheKey(c.courseId, target.question), JSON.stringify(target.answer));
+        if (!free) for (const target of staged) if (!target.question.images?.length && !target.question.options.some(o => o.images?.length)) localStorage.setItem(courseCacheKey(c.courseId, target.question), JSON.stringify(target.answer));
       } else if (!await refreshBinding()) return;
       if (!await applyAnswers()) return;
       if (typeof vmScope.vm.commitTask !== 'function') throw new Error('找不到原生提交入口；请返回课程目录后重试');
@@ -4115,12 +4135,28 @@
   }
 
   async function requestCourseAIAnswers(questions, c, runId) {
+    if (state.config.aiManaged && !state.config.aiServiceReady) throw new Error('解题服务尚未验证，请在控制台点击「检测并保存」。');
     const rawPrices = [state.config.aiInputPrice, state.config.aiCachedInputPrice, state.config.aiOutputPrice];
     const prices = rawPrices.map(Number);
-    if (!state.config.aiModel || rawPrices.some((value) => value === '' || value == null) || prices.some((price) => !Number.isFinite(price) || price < 0)) throw new Error('题库未命中；请在控制台配置支持 Responses 的模型及三项价格后继续。');
+    if (!state.config.aiModel || rawPrices.some((value) => value === '' || value == null) || prices.some((price) => !Number.isFinite(price) || price < 0)) throw new Error('价格无法核实，已阻止付费解题；请修改服务后点击「检测并保存」。');
     const prompt = '逐题给出答案，仅返回JSON。single为单选或判断，只返回一个选项；multiple为多选，逐项判断并返回全部正确选项原文，不得漏选；fill为填空，answers必须按空格从左到右填写完整文本。格式：{"answers":[{"index":0,"answers":["正确选项原文"]}]}。题目=' + JSON.stringify(questions.map(({ index, question, type, options, blankCount }) => ({ index, type: canonicalQuestionType(type), question, options: options.map((option) => option.text), blankCount })));
-    const result = await requestResponses(prompt, c, runId);
-    const parsed = JSON.parse(result.output_text);
+    const images = questions.flatMap(q => [...(q.images || []), ...q.options.flatMap(o => o.images || [])].map(image => ({ ...image, label: '题号' + q.index + '：' + image.label })));
+    let input = prompt;
+    if (images.length) {
+      if (images.length > 64 || questions.some(q => (q.images || []).length + q.options.reduce((n, o) => n + (o.images || []).length, 0) > 16)) throw new Error('题目图片超过支持数量，已暂停；请手动完成图片题。');
+      if (state.config.aiManaged && !state.config.aiVisionModel) throw new Error('图片题不可用：没有经过验证的识图模型。请手动完成图片题，或修改解题服务。');
+      const parts = [{ type: 'input_text', text: prompt + '。以下图片按题号和题目/选项标签对应；读不清时不要猜测，返回空答案。' }];
+      const cache = new Map();
+      for (const image of images) {
+        if (!c.active || c.runId !== runId) throw new Error('自动课程已取消');
+        if (!cache.has(image.url)) cache.set(image.url, await quizImageDataUrl(image.url));
+        parts.push({ type: 'input_text', text: image.label }, { type: 'input_image', image_url: cache.get(image.url) });
+      }
+      input = [{ role: 'user', content: parts }];
+    }
+    if (!c.active || c.runId !== runId) throw new Error('自动课程已取消，未发送解题请求');
+    const result = await requestResponses(prompt, c, runId, input);
+    const parsed = JSON.parse(result.output_text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, ''));
     if (!parsed || !Array.isArray(parsed.answers) || parsed.answers.length !== questions.length) throw new Error('AI批量答案格式无效或题目数量不匹配');
     const answers = new Map();
     for (const entry of parsed.answers) {
@@ -4131,7 +4167,7 @@
     return answers;
   }
 
-  function requestResponses(prompt, c, runId) {
+  function requestResponses(prompt, c, runId, input = prompt) {
     if (!state.config.aiApiKey || typeof GM_xmlhttpRequest !== 'function') return Promise.reject(new Error('未配置API Key或脚本管理器不支持请求'));
     const configuredBase = String(state.config.aiBaseUrl || '').trim().replace(/\/+$/, '');
     let endpoint;
@@ -4139,31 +4175,33 @@
     const billingKey = COURSE_BILLING_KEY + c.courseId;
     const billing = readCourseJson(billingKey, []);
     const maxPrice = Math.max(Number(state.config.aiInputPrice), Number(state.config.aiCachedInputPrice), Number(state.config.aiOutputPrice));
-    const maxInputTokens = new TextEncoder().encode(prompt).length + COURSE_AI_EXTRA_INPUT_RESERVE;
+    let maxInputTokens = new TextEncoder().encode(prompt).length + COURSE_AI_EXTRA_INPUT_RESERVE;
     const maxOutputTokens = Number(state.config.aiOutputTokens || 500);
     const reservedCost = (maxInputTokens + maxOutputTokens) * maxPrice / 1e6;
     const used = billing.reduce((sum, item) => sum + (Number(item.reservedCost || item.cost) || 0), 0);
-    if (!Number.isFinite(reservedCost) || used + reservedCost > Number(state.config.aiBudget ?? 1)) return Promise.reject(new Error('AI预算不足，已阻止发送请求'));
-    const ledger = { status: 'pending', reservedCost, at: Date.now() };
+    if (!Number.isFinite(reservedCost) || (!state.config.aiManaged && used + reservedCost > Number(state.config.aiBudget ?? 1))) return Promise.reject(new Error('AI预算不足，已阻止发送请求'));
+    const ledger = { status: 'pending', reservedCost: state.config.aiManaged ? 0 : reservedCost, at: Date.now() };
     billing.push(ledger); localStorage.setItem(billingKey, JSON.stringify(billing));
     return new Promise((resolve, reject) => {
       const markUnknown = () => { ledger.status = 'unknown'; localStorage.setItem(billingKey, JSON.stringify(billing)); };
-      GM_xmlhttpRequest({ method: 'POST', url: endpoint, timeout: Math.min(120000, Math.max(5000, Number(state.config.aiTimeout) || 45000)), headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + state.config.aiApiKey }, data: JSON.stringify({ model: state.config.aiModel || 'gpt-6-luna', reasoning: { effort: 'medium' }, input: prompt, store: false, max_output_tokens: Number(state.config.aiOutputTokens) || 500 }), onload: (res) => {
+      GM_xmlhttpRequest({ method: 'POST', url: endpoint, timeout: Math.min(120000, Math.max(5000, Number(state.config.aiTimeout) || 45000)), headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + state.config.aiApiKey }, data: JSON.stringify({ model: state.config.aiModel || 'gpt-6-luna', reasoning: { effort: 'medium' }, input, store: false, max_output_tokens: Number(state.config.aiOutputTokens) || 500 }), onload: (res) => {
         if (res.status < 200 || res.status >= 300) { ledger.status = 'failed'; localStorage.setItem(billingKey, JSON.stringify(billing)); return reject(new Error('Responses API HTTP ' + res.status)); }
         try {
           const data = JSON.parse(res.responseText || '{}'), usage = data.usage;
           if (!usage) { markUnknown(); throw new Error('缺少usage，账单未知，暂停自动解题'); }
           const entry = { input_tokens: usage.input_tokens, cached_input_tokens: usage.input_tokens_details && usage.input_tokens_details.cached_tokens || 0, output_tokens: usage.output_tokens, status: 'known', at: Date.now() };
           if (![entry.input_tokens, entry.cached_input_tokens, entry.output_tokens].every((value) => Number.isSafeInteger(value) && value >= 0) || entry.cached_input_tokens > entry.input_tokens) { markUnknown(); throw new Error('usage字段无效，账单未知，暂停自动解题'); }
-          const cost = (entry.input_tokens - entry.cached_input_tokens) * Number(state.config.aiInputPrice) / 1e6 + entry.cached_input_tokens * Number(state.config.aiCachedInputPrice) / 1e6 + entry.output_tokens * Number(state.config.aiOutputPrice) / 1e6;
+          const cost = state.config.aiManaged ? data.local_billing?.cost_usd : (entry.input_tokens - entry.cached_input_tokens) * Number(state.config.aiInputPrice) / 1e6 + entry.cached_input_tokens * Number(state.config.aiCachedInputPrice) / 1e6 + entry.output_tokens * Number(state.config.aiOutputPrice) / 1e6;
+          if (!Number.isFinite(cost) || cost < 0) { markUnknown(); throw new Error('费用记录无效，已暂停解题'); }
+          if (state.config.aiManaged) { maxInputTokens = data.local_billing.input_bound; if (!Number.isSafeInteger(maxInputTokens) || maxInputTokens < 1) throw new Error('费用预留记录无效，已暂停解题'); }
           const spent = billing.filter((item) => item !== ledger).reduce((sum, item) => sum + (Number(item.reservedCost || item.cost) || 0), 0);
           Object.assign(ledger, entry, { cost, reservedCost: 0 }); localStorage.setItem(billingKey, JSON.stringify(billing));
-          if (spent + cost > Number(state.config.aiBudget ?? 1)) throw new Error('实际usage超过预算；已记录真实usage，自动课程暂停');
+          if (!state.config.aiManaged && spent + cost > Number(state.config.aiBudget ?? 1)) throw new Error('实际usage超过预算；已记录真实usage，自动课程暂停');
           if (entry.input_tokens > maxInputTokens || entry.output_tokens > maxOutputTokens) throw new Error('Responses usage超过预留上限；已记录真实费用，暂停且不回填答案');
           if (!c.active || c.runId !== runId) return reject(new Error('自动课程已取消；已记录本次usage'));
-          const output = (data.output || []).flatMap((item) => item.content || []).find((item) => item.type === 'output_text');
-          if (!output) throw new Error('Responses API未返回output_text');
-          resolve({ output_text: output.text });
+          const output = (data.output || []).flatMap((item) => item.content || []).filter((item) => item.type === 'output_text').map(item => item.text).join('');
+          if (!output) throw new Error('解题服务未返回完整答案');
+          resolve({ output_text: output });
         } catch (error) { if (ledger.status === 'pending') markUnknown(); reject(error); }
       }, onerror: (result) => { if (result?.notSent) { Object.assign(ledger, { status: 'known', cost: 0, reservedCost: 0, input_tokens: 0, cached_input_tokens: 0, output_tokens: 0, not_sent: true }); localStorage.setItem(billingKey, JSON.stringify(billing)); } else markUnknown(); reject(new Error(result && result.error || 'AI网络结果未知；暂停，不自动重试')); }, ontimeout: () => { markUnknown(); reject(new Error('AI请求超时，账单状态未知；暂停，不自动重试')); } });
     });

@@ -3,9 +3,9 @@ import path from 'node:path';
 import { allowedHost } from './browser-bridge.mjs';
 
 export async function connectOriginalChrome(chromium, endpoint, { userDataDir, timeout = 60000 } = {}) {
-  if (endpoint === 'chrome') {
+  if (['chrome', 'edge'].includes(endpoint)) {
     const [port, route] = (await fs.readFile(path.join(userDataDir, 'DevToolsActivePort'), 'utf8')).trim().split(/\r?\n/);
-    if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535 || !/^\/devtools\/browser(?:\/[A-Za-z0-9-]+)?$/.test(route)) throw new Error('Chrome 调试地址无效，请重新开启调试开关。');
+    if (!/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65535 || !/^\/devtools\/browser(?:\/[A-Za-z0-9-]+)?$/.test(route)) throw new Error('浏览器调试地址无效，请重新开启调试开关。');
     endpoint = `ws://127.0.0.1:${port}${route}`;
   }
   const local = value => {
@@ -16,10 +16,10 @@ export async function connectOriginalChrome(chromium, endpoint, { userDataDir, t
   let address = local(endpoint);
   if (address.protocol === 'http:') {
     const response = await fetch(new URL('/json/version', address), { signal: AbortSignal.timeout(timeout), redirect: 'error' });
-    if (!response.ok) throw new Error('Chrome 调试服务未就绪。');
+    if (!response.ok) throw new Error('浏览器调试服务未就绪。');
     address = local((await response.json()).webSocketDebuggerUrl);
   }
-  if (address.protocol !== 'ws:') throw new Error('Chrome 调试服务没有返回 WebSocket 地址。');
+  if (address.protocol !== 'ws:') throw new Error('浏览器调试服务没有返回 WebSocket 地址。');
   let socket, internalId = -1, connected = false;
   const queue = [], ignored = new Set(), internal = new Set();
   const send = message => {

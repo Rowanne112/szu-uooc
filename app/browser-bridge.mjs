@@ -55,6 +55,29 @@ export async function installCourseScript(target, { config, bank, script, expect
     }
   });
 
+  const imageBinding = await target.exposeBinding('szuUoocImage', async ({ page, frame }, value) => {
+    const source = new URL(frame.url());
+    if (frame !== page.mainFrame() || source.protocol !== 'https:' || !allowedHost(source.hostname) || !/^\/home\/learn\//.test(source.pathname)) throw new Error('拒绝不属于课程学习页的图片请求');
+    const state = JSON.parse(await page.locator('#szu-uooc-course-state').textContent({ timeout: 2000 }));
+    if (String(state.courseId) !== expectedCourse || !state.active || state.phase !== 'solving') throw new Error('当前课程没有等待解题的图片任务');
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || !(allowedHost(url.hostname) || /(^|\.)(aliyuncs\.com|myqcloud\.com|qpic\.cn)$/.test(url.hostname))) throw new Error('题目图片地址不在支持范围内，请手动完成图片题。');
+    const present = await page.evaluate(value => {
+      const docs = [document, ...[...document.querySelectorAll('iframe')].map(f => { try { return f.contentDocument; } catch { return null; } }).filter(Boolean)];
+      return docs.some(doc => [...doc.querySelectorAll('.queContainer img')].some(img => { try { return new URL(img.getAttribute('data-src') || img.currentSrc || img.getAttribute('src'), doc.baseURI).href === value; } catch { return false; } }));
+    }, url.href);
+    if (!present) throw new Error('题目图片与当前试卷不匹配，已暂停。');
+    const response = await page.request.get(url.href, { timeout: 15000, maxRedirects: 0 });
+    try {
+      if (!response.ok()) throw new Error('题目图片读取失败，请在课程页面检查图片。');
+      const bytes = await response.body();
+      if (!bytes.length || bytes.length > 5 * 1024 * 1024) throw new Error('题目图片为空或超过5MB。');
+      const current = JSON.parse(await page.locator('#szu-uooc-course-state').textContent());
+      if (!current.active || current.phase !== 'solving' || current.sourceId !== state.sourceId || String(current.courseId) !== expectedCourse) throw new Error('课程已暂停或更换题目，未发送图片解题请求。');
+      return { base64: bytes.toString('base64'), type: response.headers()['content-type'] || '' };
+    } finally { await response.dispose(); }
+  });
+
   let injection;
   try { injection = await target.addInitScript({ content: `
 if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.online)$/.test(location.hostname) && /^\\/home\\/learn\\//.test(location.pathname) && location.hash.replace(/^#\\/?/, '').split('/')[0] === ${JSON.stringify(expectedCourse)}) {
@@ -72,12 +95,12 @@ if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.on
     const key = 'szu-uooc:auto-player:config';
     let prior = {}; try { prior = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) {}
     delete prior.aiApiKey;
-    localStorage.setItem(key, JSON.stringify({ ...prior, enabled: false, autoPlay: false, autoNext: false, aiBaseUrl: ${JSON.stringify(config.base_url)}, aiModel: ${JSON.stringify(config.model)}, aiTimeout: 90000,
+    localStorage.setItem(key, JSON.stringify({ ...prior, enabled: false, autoPlay: false, autoNext: false, aiBaseUrl: ${JSON.stringify(config.base_url)}, aiModel: ${JSON.stringify(config.model)}, aiTimeout: 90000, aiManaged: true, aiServiceReady: ${JSON.stringify(Boolean(config.profile?.verified_text))}, aiVisionModel: ${JSON.stringify(config.image_profile?.id || '')},
       aiInputPrice: ${JSON.stringify(config.pricing?.input_per_million ?? '')}, aiCachedInputPrice: ${JSON.stringify(config.pricing?.cached_input_per_million ?? '')}, aiOutputPrice: ${JSON.stringify(config.pricing?.output_per_million ?? '')}, aiBudget: ${JSON.stringify(config.budget)}, aiOutputTokens: 2048, courseAnswerMode: ${JSON.stringify(config.answer_mode || 'ai')} }));
     ${script}
     ${consoleMode ? "const hide = () => { const style = document.createElement('style'); style.textContent = '#szu-uooc-auto-player-controls{display:none!important}'; document.head.appendChild(style); }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hide, {once:true}); else hide();" : ''}
   })();
 }` }); }
-  catch (error) { await binding.dispose(); throw error; }
-  return async () => { try { await injection.dispose(); } finally { await binding.dispose(); } };
+  catch (error) { await imageBinding.dispose(); await binding.dispose(); throw error; }
+  return async () => { try { await injection.dispose(); } finally { await imageBinding.dispose(); await binding.dispose(); } };
 }

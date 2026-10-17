@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import { allowedHost } from '../browser-bridge.mjs';
 import { validPrices } from '../api-request.mjs';
+import { normalizeServiceURL, serviceFingerprint } from '../api-protocol.mjs';
 
 export const defaults = {
   base_url: 'https://api.daitu.cc/v1', model: 'gpt-6-luna', wire_api: 'responses',
@@ -25,10 +26,12 @@ export function validateConfig(config) {
   let url;
   try { url = new URL(config.base_url); } catch { throw new Error('请输入完整的解题服务接口地址。'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('接口地址需要是 HTTPS 地址，不能带 Key 或其他参数。');
-  if (typeof config.model !== 'string' || !/^[a-zA-Z0-9._:/-]{1,120}$/.test(config.model) || config.reasoning_effort !== 'medium' || config.wire_api !== 'responses') throw new Error('请填写支持 Responses 接口和 medium 推理的模型名称。');
+  if (typeof config.model !== 'string' || (!/^[a-zA-Z0-9._:/-]{1,120}$/.test(config.model) && !(config.service_status === 'blocked' && config.model === '')) || !['responses', 'chat'].includes(config.wire_api)) throw new Error('模型配置无效，请点击「检测并保存」，程序会自动选择模型。');
   if (typeof config.api_key !== 'string' || (config.answer_mode !== 'free' && !config.api_key.trim()) || /\s/.test(config.api_key) || config.api_key.length > 2048) throw new Error('AI 解题的 Key 不能为空，也不能包含空格或换行。');
   if (typeof config.budget !== 'number' || !Number.isFinite(config.budget) || config.budget <= 0 || config.budget > 1) throw new Error('每门课预算应大于 0 且不超过 $1.00。');
-  validPrices(config.pricing);
+  if (!['unchecked', 'blocked'].includes(config.service_status)) validPrices(config.pricing);
+  if (config.profile && (config.profile.id !== config.model || config.detection?.fingerprint !== serviceFingerprint(config.base_url, config.api_key))) throw new Error('服务设置已变化，请重新点击「检测并保存」。');
+  normalizeServiceURL(config.base_url);
   return config;
 }
 

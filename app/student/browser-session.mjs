@@ -6,7 +6,7 @@ import { allowedHost } from '../browser-bridge.mjs';
 import { runController } from '../controller.mjs';
 import { connectOriginalChrome } from '../chrome-connection.mjs';
 import { validateCourseURL } from './settings.mjs';
-import { discoverChrome, openCheckinPages, checkinURL, activateChromeProcess } from './checkin-browser.mjs';
+import { discoverChrome, openCheckinPages, checkinURL, activateChromeProcess, browserTypes } from './checkin-browser.mjs';
 
 export function courseFromURL(value) {
   let url;
@@ -31,40 +31,50 @@ export async function resolveDebugEndpoint(browserInfo) {
   }
   // Modern Chrome remote-debugging consent uses the channel endpoint, not a
   // stale UUID route left in DevToolsActivePort by an older browser launch.
-  return 'chrome';
+  return browserInfo?.kind || 'chrome';
 }
 
-export function createBrowserSession({ appDir, dataDir, connectBrowser, discoverBrowser = discoverChrome, openPages = openCheckinPages, observeCatalog = async () => {}, observeCourse, requestFetch, verify, activateBrowser = activateChromeProcess, log = () => {} } = {}) {
+export function createBrowserSession({ appDir, dataDir, connectBrowser, discoverBrowser = discoverChrome, openPages = openCheckinPages, observeCatalog = async () => {}, observeCourse, requestFetch, verify, getBrowserKind = () => 'chrome', activateBrowser = activateChromeProcess, log = () => {} } = {}) {
   let browser, connecting;
   const workers = new Set();
+  const name = () => browserTypes[getBrowserKind()]?.name || '浏览器';
   const status = { status: 'idle', message: '', catalog: 'idle', error: '' };
   async function get() {
     if (browser?.isConnected()) return browser;
     if (connecting) return connecting;
-    status.status = 'connecting'; status.message = '在 Chrome 点「允许」'; status.error = '';
+    status.status = 'connecting'; status.message = `在 ${name()} 中允许连接`; status.error = '';
     connecting = (async () => {
       if (connectBrowser) browser = await connectBrowser();
       else {
         const require = createRequire(path.join(appDir, 'package.json'));
         const { chromium } = require('playwright');
-        const info = await discoverBrowser();
+        const info = await discoverBrowser({ kind: getBrowserKind() });
         browser = await connectOriginalChrome(chromium, await resolveDebugEndpoint(info), info);
       }
-      status.status = 'connected'; status.message = 'Chrome 已连接';
+      status.status = 'connected'; status.message = `${name()} 已连接`;
       const connected = browser;
-      connected.once('disconnected', () => { if (browser !== connected) return; browser = null; status.status = 'idle'; status.message = 'Chrome 已断开'; });
+      connected.once('disconnected', () => { if (browser !== connected) return; browser = null; status.status = 'idle'; status.message = `${name()} 已断开`; });
       return browser;
-    })().catch(error => { log('Chrome 连接错误：' + String(error.message).replace(/(?:ws|https?):\/\/[^\s<>]+/g, '[连接地址]').slice(0, 800)); status.status = 'error'; status.error = 'Chrome 连接未完成。检查调试开关，在弹窗点「允许」，再重试。'; throw new Error(status.error); }).finally(() => { connecting = null; });
+    })().catch(error => { log(`${name()} 连接错误：` + String(error.message).replace(/(?:ws|https?):\/\/[^\s<>]+/g, '[连接地址]').slice(0, 800)); status.status = 'error'; status.error = `${name()} 连接未完成。检查调试开关，允许连接后重试。`; throw new Error(status.error); }).finally(() => { connecting = null; });
     return connecting;
   }
-  async function open(kind) {
-    if (kind !== 'site') throw new Error('请复制 chrome://inspect/#remote-debugging，在 Chrome 地址栏粘贴并回车。');
-    const info = await discoverBrowser();
+  async function open(kind, courseURL) {
+    if (!['site', 'course'].includes(kind)) throw new Error(`请复制 ${browserTypes[getBrowserKind()]?.debugURL}，在 ${name()} 地址栏粘贴并回车。`);
+    if (kind === 'course') {
+      const target = courseFromURL(courseURL).url;
+      const session = await get(), context = session.contexts()[0];
+      if (!context) throw new Error(`没有找到已登录的 ${name()} 窗口。`);
+      const page = await context.newPage();
+      try { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
+      catch (error) { await page.close().catch(() => {}); throw error; }
+      return;
+    }
+    const info = await discoverBrowser({ kind: getBrowserKind() });
     if (!info.available) throw new Error(info.error);
     const profileDirectory = info.lastUsedProfile || info.profiles[0]?.directory;
     const target = 'https://www.uooc.net.cn/home/index';
     const results = await openPages([target], { ...info, profileDirectory });
-    if (!results[0]?.ok) throw new Error(results[0]?.error || 'Chrome 没有打开。');
+    if (!results[0]?.ok) throw new Error(results[0]?.error || `${name()} 没有打开。`);
   }
   async function resolveCourse(value, name = '') {
     const item = courseFromURL(value);
@@ -129,7 +139,7 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
         for (const row of found) {
           try { const item = courseFromURL(row.url); if (!unique.has(item.id) || item.learning) unique.set(item.id, { ...item, name: row.name.slice(0, 120) }); } catch {}
         }
-        if (!unique.size) throw new Error('请在 Chrome 登录并打开「我的课程」，再读取。');
+        if (!unique.size) throw new Error(`请在 ${name()} 登录并打开「我的课程」，再读取。`);
         const resolved = [];
         for (const item of unique.values()) resolved.push(await resolveCourse(item.url, item.name));
         status.catalog = 'ready'; return resolved;
@@ -146,7 +156,7 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
     Promise.resolve().then(async () => {
       const course = courseFromURL(args[1]), session = await get(), context = session.contexts()[0];
       if (pending === 'stop') return;
-      if (!context) throw new Error('没有找到已登录的 Chrome 窗口。');
+      if (!context) throw new Error(`没有找到已登录的 ${name()} 窗口。`);
       const candidates = [];
       for (const candidate of context.pages()) {
         try {
@@ -176,6 +186,51 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
     }).then(() => child.emit('exit', 0, null), error => { child.stderr.write(error.message + '\n'); child.emit('message', { type: 'error', error: error.message }); child.emit('exit', 1, null); });
     return child;
   }
-  async function close() { await Promise.allSettled([...workers].map(page => page.close())); if (connecting) await connecting.catch(() => {}); if (browser) await browser.close(); }
-  return { get, open, courses, resolveCourse, spawnWorker, state: () => ({ ...status }), close };
+  async function assertSwitchable(courseURLs = []) {
+    const session = await get(), context = session.contexts()[0];
+    if (!context) throw new Error('请先连接原浏览器，核对交卷结果后再切换。');
+    let timer, cancelled = false;
+    const inspect = async () => {
+      const pages = context.pages().filter(page => { try { const url = new URL(page.url()); return url.protocol === 'https:' && allowedHost(url.hostname); } catch { return false; } });
+      const origins = new Set([...courseURLs.map(value => {
+        const url = new URL(value);
+        if (url.protocol !== 'https:' || !allowedHost(url.hostname) || url.username || url.password || url.port && url.port !== '443') throw new Error('交卷检查仅允许 UOOC 的 HTTPS 网站。');
+        return url.origin;
+      }), ...pages.map(page => new URL(page.url()).origin)]);
+      if (!origins.size) origins.add('https://www.uooc.net.cn');
+      for (const origin of origins) {
+        if (cancelled) return;
+        let page = pages.find(page => new URL(page.url()).origin === origin), owned;
+        try {
+          if (!page) {
+            page = owned = await context.newPage();
+            await page.goto(origin + '/home/index', { waitUntil: 'domcontentloaded', timeout: 15000 });
+          }
+          if (cancelled) return;
+          const pending = await page.evaluate(expectedOrigin => {
+            if (location.origin !== expectedOrigin) throw new Error('请在原浏览器登录并核对交卷结果。');
+            const pending = [];
+            for (const key of Object.keys(localStorage).filter(key => key.startsWith('szu-uooc:course-state:'))) {
+              let saved;
+              try { saved = JSON.parse(localStorage.getItem(key)); }
+              catch { throw new Error('原浏览器的交卷记录不可读，请先核对后重试。'); }
+              if (saved?.pendingSubmit) pending.push(key.slice('szu-uooc:course-state:'.length));
+            }
+            return pending;
+          }, origin);
+          if (pending.length) throw new Error(`交卷结果尚未确认（课程 ${pending.join('、')}），请回原浏览器继续核对后再切换。`);
+        } finally { if (owned) await owned.close().catch(() => {}); }
+      }
+    };
+    try { await Promise.race([inspect(), new Promise((_, reject) => { timer = setTimeout(() => { cancelled = true; reject(new Error('交卷状态检查超时，请回原浏览器核对后重试。')); }, 20000); })]); }
+    finally { clearTimeout(timer); }
+  }
+  async function close() {
+    await Promise.allSettled([...workers].map(page => page.close()));
+    if (connecting) await connecting.catch(() => {});
+    const previous = browser; browser = null;
+    if (previous) await previous.close();
+    Object.assign(status, { status: 'idle', catalog: 'idle', message: '', error: '' });
+  }
+  return { get, open, courses, resolveCourse, spawnWorker, assertSwitchable, state: () => ({ ...status, kind: getBrowserKind(), ...browserTypes[getBrowserKind()] }), close };
 }

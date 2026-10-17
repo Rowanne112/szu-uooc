@@ -6,12 +6,16 @@ import { spawn, execFile } from 'node:child_process';
 import { allowedHost } from '../browser-bridge.mjs';
 
 export const checkinMarker = 'szu_checkin';
+export const browserTypes = {
+  chrome: { name: 'Chrome', debugURL: 'chrome://inspect/#remote-debugging' },
+  edge: { name: 'Edge', debugURL: 'edge://inspect/#remote-debugging' },
+};
 
 export async function activateChromeProcess(pid, { platform = process.platform, execFileImpl = execFile } = {}) {
   if (platform !== 'darwin') return;
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('课程浏览器进程无效。');
   const script = 'function run(args) { ObjC.import("AppKit"); var app = $.NSRunningApplication.runningApplicationWithProcessIdentifier(Number(args[0])); if (!app.activateWithOptions($.NSApplicationActivateAllWindows)) throw new Error("Course browser activation failed"); }';
-  await new Promise((resolve, reject) => execFileImpl('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, String(pid)], { timeout: 5000 }, error => error ? reject(new Error('课程窗口未能激活，请从 Chrome 窗口中选择该课程。')) : resolve()));
+  await new Promise((resolve, reject) => execFileImpl('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, String(pid)], { timeout: 5000 }, error => error ? reject(new Error('课程窗口未能激活，请从所选浏览器窗口中选择该课程。')) : resolve()));
 }
 export function checkinURL(value, marked = false) {
   let url;
@@ -24,28 +28,34 @@ export function checkinURL(value, marked = false) {
   return url.href;
 }
 
-export async function discoverChrome({ platform = process.platform, home = os.homedir(), env = process.env } = {}) {
+export async function discoverBrowser({ kind = 'chrome', platform = process.platform, home = os.homedir(), env = process.env } = {}) {
+  if (!Object.hasOwn(browserTypes, kind)) throw new Error('请选择 Chrome 或 Edge。');
+  const info = { kind, ...browserTypes[kind], installed: false, available: false, profiles: [] };
+  const app = kind === 'edge' ? 'Microsoft Edge' : 'Google Chrome';
+  const folder = kind === 'edge' ? 'Microsoft/Edge' : 'Google/Chrome';
+  const binary = kind === 'edge' ? 'msedge.exe' : 'chrome.exe';
   let candidates, userDataDir;
   if (platform === 'darwin') {
-    candidates = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', path.join(home, 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')];
-    userDataDir = path.join(home, 'Library/Application Support/Google/Chrome');
+    candidates = [`/Applications/${app}.app/Contents/MacOS/${app}`, path.join(home, `Applications/${app}.app/Contents/MacOS/${app}`)];
+    userDataDir = path.join(home, 'Library/Application Support', kind === 'edge' ? 'Microsoft Edge' : 'Google/Chrome');
   } else if (platform === 'win32') {
-    candidates = [env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Google/Chrome/Application/chrome.exe'), env.ProgramFiles && path.join(env.ProgramFiles, 'Google/Chrome/Application/chrome.exe'), env['ProgramFiles(x86)'] && path.join(env['ProgramFiles(x86)'], 'Google/Chrome/Application/chrome.exe')].filter(Boolean);
-    userDataDir = env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Google/Chrome/User Data');
-  } else return { available: false, profiles: [], error: '自动签到目前支持 Windows 和 macOS 的 Google Chrome。' };
+    candidates = [env.LOCALAPPDATA, env.ProgramFiles, env['ProgramFiles(x86)']].filter(Boolean).map(root => path.join(root, folder, 'Application', binary));
+    userDataDir = env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, folder, 'User Data');
+  } else return { ...info, error: '目前支持 Windows 和 macOS 的 Chrome / Edge。' };
   const executable = (await Promise.all(candidates.map(async file => await fs.stat(file).catch(() => null) ? file : null))).find(Boolean);
-  if (!executable || !userDataDir) return { available: false, profiles: [], error: '未找到 Google Chrome，请先安装并登录课程网站。' };
+  if (!executable || !userDataDir) return { ...info, error: `未找到 ${app}，请先安装并登录课程网站。` };
   try {
     // Read profile names only. Never read cookies, passwords or browsing history.
     const state = JSON.parse(await fs.readFile(path.join(userDataDir, 'Local State'), 'utf8'));
     const profiles = Object.entries(state.profile?.info_cache || {}).filter(([directory]) => /^[a-zA-Z0-9 _-]{1,80}$/.test(directory)).map(([directory, info]) => ({ directory, name: String(info.name || directory).slice(0, 120) }));
     if (!profiles.length) throw new Error('没有可选资料');
-    return { available: true, executable, userDataDir: await fs.realpath(userDataDir), profiles, lastUsedProfile: profiles.some(profile => profile.directory === state.profile?.last_used) ? state.profile.last_used : profiles[0].directory };
-  } catch { return { available: false, profiles: [], error: '请先打开 Chrome 创建用户资料，并登录课程网站，再刷新控制台。' }; }
+    return { ...info, installed: true, available: true, executable, userDataDir: await fs.realpath(userDataDir), profiles, lastUsedProfile: profiles.some(profile => profile.directory === state.profile?.last_used) ? state.profile.last_used : profiles[0].directory };
+  } catch { return { ...info, installed: true, error: `请先打开 ${info.name} 创建用户资料，并登录课程网站，再刷新控制台。` }; }
 }
+export const discoverChrome = discoverBrowser;
 
 export function browserCommand(urls, browser) {
-  if (!browser?.executable || !browser.userDataDir || !/^[a-zA-Z0-9 _-]{1,80}$/.test(browser.profileDirectory || '')) throw new Error('请在签到设置中选择已登录的 Chrome 资料。');
+  if (!browser?.executable || !browser.userDataDir || !/^[a-zA-Z0-9 _-]{1,80}$/.test(browser.profileDirectory || '')) throw new Error('请在签到设置中选择已登录的浏览器资料。');
   return { command: browser.executable, args: [`--user-data-dir=${browser.userDataDir}`, `--profile-directory=${browser.profileDirectory}`, ...urls] };
 }
 
@@ -55,7 +65,7 @@ function submit(command, args) {
     let timer;
     const finish = error => { clearTimeout(timer); child.unref(); error ? reject(error) : resolve(); };
     child.once('error', finish);
-    child.once('exit', code => finish(code ? new Error('Chrome 打开命令失败，请检查浏览器安装和用户资料。') : null));
+    child.once('exit', code => finish(code ? new Error('浏览器打开命令失败，请检查浏览器安装和用户资料。') : null));
     // A newly launched browser stays running; only command acceptance is observable here.
     child.once('spawn', () => { timer = setTimeout(() => finish(), 700); });
   });

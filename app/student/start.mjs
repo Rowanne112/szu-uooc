@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { explainProblem } from './user-guidance.mjs';
 import { readFileSync, writeFileSync, unlinkSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,7 +46,7 @@ export function checkPackage() {
 
 export function openBrowser(url) {
   let command, args;
-  if (process.platform === 'darwin') { command = '/usr/bin/open'; args = ['-a', 'Google Chrome', url]; }
+  if (process.platform === 'darwin') { command = '/usr/bin/open'; args = [url]; }
   else if (process.platform === 'win32') { command = 'rundll32.exe'; args = ['url.dll,FileProtocolHandler', url]; }
   else { command = 'xdg-open'; args = [url]; }
   const child = spawn(command, args, { stdio: 'ignore', detached: true });
@@ -83,7 +84,7 @@ async function main() {
   }
   const consoleApp = await createConsole({ appDir, dataDir });
   consoleApp.server.once('close', release);
-  console.log('szu-uooc 控制台已打开。按页面指引连接 Chrome，读取课程或停止运行。');
+  console.log('szu-uooc 控制台已打开。按页面指引选择并连接浏览器，读取课程或停止运行。');
   console.log(consoleApp.url);
   await saveAddress();
   async function saveAddress() {
@@ -102,5 +103,9 @@ async function main() {
 }
 
 if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  main().catch(error => { console.error('启动失败：' + error.message); process.exitCode = 1; });
+  main().catch(async error => {
+    const logs = path.resolve(appDir, '../runtime');
+    try { await fs.mkdir(logs, { recursive: true, mode: 0o700 }); await fs.writeFile(path.join(logs, 'start-error.log'), String(error.stack || error), { mode: 0o600 }); } catch {}
+    console.error(explainProblem(error.message)); process.exitCode = 1;
+  });
 }

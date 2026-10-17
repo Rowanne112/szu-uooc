@@ -7,8 +7,10 @@ $node = Join-Path $runtime 'node.exe'
 $lock = Join-Path $root 'runtime/.install-lock'
 $temp = $null
 $locked = $false
+$help = '请确认电脑能打开网页，再双击「启动-Windows.cmd」。仍不能打开时，重新下载并完整解压安装包，再启动。'
 try {
     if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64' -and $env:PROCESSOR_ARCHITEW6432 -ne 'AMD64') {
+        $help = '请在 Windows 10 或 11 的 64 位电脑上使用这个安装包；这台电脑请联系帮你安装的人。'
         throw '本入口适用 Windows 10/11 x64，暂不支持这台电脑的处理器。'
     }
     if (Test-Path $node) {
@@ -25,7 +27,7 @@ try {
     }
     New-Item -ItemType Directory -Force (Join-Path $root 'runtime') | Out-Null
     try { New-Item -ItemType Directory $lock -ErrorAction Stop | Out-Null }
-    catch { throw '已有下载窗口正在运行，请回到原窗口等待完成。' }
+    catch { $help = '请回到已经打开的下载窗口，等它完成后，再双击「启动-Windows.cmd」。'; throw '已有下载窗口正在运行，请回到原窗口等待完成。' }
     $locked = $true
     $temp = Join-Path $root ('runtime/.download-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory $temp | Out-Null
@@ -60,15 +62,17 @@ try {
     $env:PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = '1'
     Push-Location (Join-Path $root 'app')
     try {
-        & $node (Join-Path $runtime 'node_modules/npm/bin/npm-cli.js') ci --ignore-scripts --omit=optional --no-audit --no-fund --registry=https://registry.npmjs.org --cache (Join-Path $root 'runtime/npm-cache')
+        & $node (Join-Path $runtime 'node_modules/npm/bin/npm-cli.js') ci --ignore-scripts --omit=optional --no-audit --no-fund --registry=https://registry.npmjs.org --cache (Join-Path $root 'runtime/npm-cache') *> (Join-Path $root 'runtime/install-error.log')
         if ($LASTEXITCODE -ne 0) { throw '组件下载失败，请检查网络后重新点击下载依赖。' }
     } finally { Pop-Location }
-    & $node 'app/student/start.mjs' --check
+    & $node 'app/student/start.mjs' --check *>> (Join-Path $root 'runtime/install-error.log')
     if ($LASTEXITCODE -ne 0) { throw '依赖自检失败，请重新点击下载依赖。' }
     Write-Host '下载完成。现在可以双击「启动-Windows.cmd」；以后无需重复下载。'
 } catch {
-    Write-Host ('下载未完成：' + $_.Exception.Message)
-    Write-Host '检查网络后，重新双击「下载依赖-Windows.cmd」重试。'
+    $diagnostic = $_.Exception.Message
+    try { New-Item -ItemType Directory -Force (Join-Path $root 'runtime') | Out-Null; Add-Content -Encoding UTF8 (Join-Path $root 'runtime/install-error.log') $diagnostic } catch {}
+    Write-Host $help
+    Write-Host '仍不能打开时，把程序文件夹里的 runtime/install-error.log 发给帮你安装的人。'
     exit 1
 } finally {
     if ($temp -and (Test-Path $temp)) { Remove-Item -Recurse -Force $temp }

@@ -56,7 +56,7 @@ if (!Array.isArray(JSON.parse(bank).questions)) throw new Error('答案库结构
 const script = await fs.readFile(path.join(here, 'szu-uooc.user.js'), 'utf8');
 const requestAPI = createAPI(config, path.join(privateDir, 'ledger'), options.fetchAPI || fetch);
 if (config.answer_mode !== 'free' && consoleMode && !['pause', 'stop'].includes(requestedCommand)) await requestAPI.prepareResume(expectedCourse);
-report('连接已登录的 Chrome。请先在 chrome://inspect/#remote-debugging 开启调试，并在 Chrome 提示中批准本次连接。');
+report(options.browser ? '使用所选浏览器的已有课程会话。' : '连接已登录的 Chrome。请先在 chrome://inspect/#remote-debugging 开启调试，并在 Chrome 提示中批准本次连接。');
 const cdpEndpoint = process.env.SZU_UOOC_CDP_ENDPOINT || 'chrome';
 if (cdpEndpoint !== 'chrome' && !['127.0.0.1', 'localhost'].includes(new URL(cdpEndpoint).hostname)) throw new Error('调试连接仅允许本机浏览器。');
 const browser = options.browser || await connectOriginalChrome(chromium, cdpEndpoint, cdpEndpoint === 'chrome' ? await discoverChrome() : {});
@@ -67,7 +67,7 @@ const disconnect = async () => {
 };
 if (requestedCommand === 'stop') { await disconnect(); return; }
 const browserPages = browser.contexts().flatMap(context => context.pages());
-if (options.page && !browserPages.includes(options.page)) { await disconnect(); throw new Error('指定的课程标签页不属于已连接的 Chrome。'); }
+if (options.page && !browserPages.includes(options.page)) { await disconnect(); throw new Error('指定的课程标签页不属于已连接的 浏览器。'); }
 if (options.page) {
   try {
     await options.page.waitForURL(current => current.protocol === 'https:' && allowedHost(current.hostname)
@@ -76,7 +76,7 @@ if (options.page) {
   } catch {
     await disconnect();
     if (requestedCommand === 'stop') return;
-    throw new Error('课程入口跳转未完成。请在已连接的 Chrome 登录 UOOC，并打开这门课的学习页后重试。');
+    throw new Error('课程入口跳转未完成。请在已连接的 浏览器 登录 UOOC，并打开这门课的学习页后重试。');
   }
 }
 let candidates = (options.page ? [options.page] : browserPages).filter((candidate) => {
@@ -88,7 +88,7 @@ candidates = (await Promise.all(candidates.map(async candidate => {
   try { return await candidate.evaluate(() => sessionStorage.getItem('szu-uooc:checkin-tab') === '1') ? null : candidate; }
   catch { return null; }
 }))).filter(Boolean);
-// A saved course can be opened using the existing signed-in Chrome profile.
+// A saved course can be opened using the existing signed-in 浏览器 profile.
 if (!options.page && consoleMode && (options.freshPage || candidates.length === 0) && requestedCommand !== 'stop') {
   const context = browser.contexts()[0];
   if (context) { const target = await context.newPage(); await target.goto(courseURL, { waitUntil: 'domcontentloaded', timeout: 60000 }); candidates = [target]; }
@@ -96,12 +96,12 @@ if (!options.page && consoleMode && (options.freshPage || candidates.length === 
 if (requestedCommand === 'stop') { await disconnect(); return; }
 if (candidates.length !== 1) {
   await disconnect();
-  throw new Error('请在现有 Chrome 中保留一个目标课程学习标签页，再运行控制器；不会新开登录窗口。');
+  throw new Error('请在现有 浏览器 中保留一个目标课程学习标签页，再运行控制器；不会新开登录窗口。');
 }
 const page = candidates[0];
 const connectedURL = new URL(page.url());
 if (!allowedHost(connectedURL.hostname) || !/^\/home\/learn\//.test(connectedURL.pathname) || connectedURL.hash.replace(/^#\/?/, '').split('/')[0] !== expectedCourse) {
-  await disconnect(); throw new Error('请先在 Chrome 登录并打开这门课程的学习页面，再点击开始。');
+  await disconnect(); throw new Error('请先在 浏览器 登录并打开这门课程的学习页面，再点击开始。');
 }
 const legacyPanelId = ['fast', 'uooc-auto-player-controls'].join('');
 if (await page.locator('#' + legacyPanelId).count()) {
@@ -181,7 +181,7 @@ terminal?.on('line', async (line) => {
 });
 await page.reload({ waitUntil: 'domcontentloaded', timeout: 60000 });
 report('课程浏览器已就绪。API Key 只保留在本地进程。');
-report(`私有账本：${path.join(privateDir, 'ledger')}；Ctrl+C 停止并保留 Chrome 窗口与已完成进度。`);
+report(`私有账本：${path.join(privateDir, 'ledger')}；Ctrl+C 停止并保留 浏览器 窗口与已完成进度。`);
 try {
   await capturePreview('initial.png');
   const initialLocation = new URL(page.url());
@@ -281,7 +281,7 @@ try {
             };
             try {
               const clicked = options.verify ? await options.verify(click, { page, state }) : await click();
-              if (clicked) report('已点击原生验证控件；继续等待网站确认。若出现额外挑战，请在 Chrome 接管。');
+              if (clicked) report('已点击原生验证控件；继续等待网站确认。若出现额外挑战，请在 浏览器 接管。');
             } catch (error) {
               verificationAttempted = ''; verificationRetryAt = Date.now() + 5000;
               if (!stopping) report('原生验证点击未完成，5秒后重试：' + String(error.message || error).replaceAll(config.api_key || '\0', '[已隐藏]'));
@@ -291,11 +291,11 @@ try {
       }
     }
     if (!['video', 'paused', 'awaiting_verification'].includes(state.phase) && Date.now() - lastActivity > 20 * 60 * 1000) {
-      report('长时间没有任务状态变化，请检查 Chrome 视频播放或网络。进度已保留。');
+      report('长时间没有任务状态变化，请检查 浏览器 视频播放或网络。进度已保留。');
       if (consoleMode) {
         await stopCourseScript(page);
         const paused = JSON.parse(await page.locator('#szu-uooc-course-state').textContent());
-        paused.error = '长时间没有任务状态变化，请检查 Chrome 和网络后点击继续。';
+        paused.error = '长时间没有任务状态变化，请检查 浏览器 和网络后点击继续。';
         emitState(paused);
       } else await terminal.question('按 Enter 继续观察，或 Ctrl+C 结束：', { signal: stopSignal.signal }).catch(() => '');
       lastActivity = Date.now();
@@ -307,7 +307,7 @@ try {
   if (!stopping) {
     if (!lastState || JSON.parse(lastState).phase !== 'complete') await stopCourseScript(page).catch(() => {});
     await disconnect();
-    report(options.freshPage ? '课程控制器已结束，平台进度已保留。' : '控制器已断开；原 Chrome 及课程窗口保持打开供验收。');
+    report(options.freshPage ? '课程控制器已结束，平台进度已保留。' : '控制器已断开；原 浏览器 及课程窗口保持打开供验收。');
     stopping = true;
   }
   stopSignal.abort();

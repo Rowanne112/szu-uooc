@@ -4,10 +4,13 @@ import http from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
+import { isDeepStrictEqual } from 'node:util';
 import { defaults, validateConfig, validateCourseURL, readJSON, saveJSON } from './settings.mjs';
 import { createBrowserSession, courseFromURL } from './browser-session.mjs';
 import { createCheckin } from './checkin.mjs';
-import { checkinURL } from './checkin-browser.mjs';
+import { checkinURL, discoverBrowser, browserTypes } from './checkin-browser.mjs';
+import { normalizeServiceURL } from '../api-protocol.mjs';
+import { detectService } from './service-detection.mjs';
 
 const phases = { opening: '打开学习资源', connecting: '等待浏览器授权', loading_catalog: '读取课程目录', video: '播放视频', solving: '准备答案', awaiting_verification: '等待网站验证', submitting: '提交测验', paused: '已暂停', complete: '已完成' };
 const statuses = { ready: '未开始', queued: '等待运行', starting: '正在连接', running: '运行中', pausing: '正在暂停', paused: '已暂停', stopping: '正在停止', stopped: '已停止', error: '需要处理', complete: '已完成' };
@@ -15,14 +18,38 @@ const statuses = { ready: '未开始', queued: '等待运行', starting: '正在
 export async function createConsole({ appDir, dataDir, spawnController, browserOptions = {}, fetchImpl = fetch, checkDependencies, installDependencies, checkinOptions = {} } = {}) {
   const configFile = path.join(dataDir, 'api.json');
   const queueFile = path.join(dataDir, 'courses.json');
+  const browserFile = path.join(dataDir, 'browser.json');
+  const savedBrowser = await readJSON(browserFile, null);
+  let browserSettings = savedBrowser || { kind: 'chrome', needsCourseRefresh: false };
+  if (!Object.hasOwn(browserTypes, browserSettings.kind)) throw new Error('浏览器设置不可读，请检查 browser.json。');
+  const hasPreviousCheckin = Boolean(await fs.stat(path.join(dataDir, 'checkin.json')).catch(() => null));
+  let browserChoices = [];
+  const browserDiscovery = browserOptions.discoverBrowser || discoverBrowser;
+  async function listBrowsers() {
+    browserChoices = await Promise.all(Object.entries(browserTypes).map(async ([kind, info]) => {
+      const found = await browserDiscovery({ kind });
+      return { kind, ...info, installed: found.installed ?? found.available, error: found.error || '' };
+    }));
+    return browserChoices;
+  }
+  await listBrowsers();
   const require = createRequire(path.join(appDir, 'package.json'));
   let config;
   let configError = '';
   try { config = await readJSON(configFile, null); }
   catch { configError = '原来的设置不可读，请在控制台重新保存 Key。'; config = null; }
-  if (config) { try { validateConfig(config); config = { answer_mode: 'ai', ...config }; } catch (error) { configError = error.message; config = null; } }
+  if (config) {
+    try { validateConfig(config); config = { answer_mode: 'ai', ...config }; }
+    catch (error) {
+      configError = error.message;
+      if (/服务设置已变化/.test(error.message)) {
+        config = validateConfig({ ...config, profile: undefined, image_profile: undefined, detection: undefined, service_status: 'unchecked', pricing: null });
+      } else config = null;
+    }
+  }
   const saved = await readJSON(queueFile, { courses: [] });
   const courses = Array.isArray(saved.courses) ? saved.courses : [];
+  let selectionRequired = !savedBrowser && !config && !courses.length && !hasPreviousCheckin;
   for (const course of courses) {
     validateCourseURL(course.url);
     course.url = courseFromURL(course.url).url;
@@ -45,14 +72,14 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
 
   const scrub = value => String(value ?? '').replaceAll(config?.api_key || '\0', '[已隐藏]').replace(/(?:sk-|sess-)[a-z0-9_-]+|Bearer\s+\S+/gi, '[已隐藏]').slice(0, 1000);
   const log = (message, courseId) => { logs.push({ at: new Date().toISOString(), message: scrub(message), courseId }); if (logs.length > 100) logs.shift(); };
-  const browserSession = createBrowserSession({ appDir, dataDir, log, ...browserOptions });
+  const browserSession = createBrowserSession({ appDir, dataDir, log, ...browserOptions, getBrowserKind: () => browserSettings.kind });
   const launchController = spawnController || browserSession.spawnWorker;
   function persist() {
     const snapshot = structuredClone({ courses });
     savedQueue = savedQueue.then(() => saveJSON(queueFile, snapshot));
     return savedQueue;
   }
-  const checkin = await createCheckin({ ...checkinOptions, appDir, dataDir, getCourses: () => courses, log });
+  const checkin = await createCheckin({ ...checkinOptions, appDir, dataDir, getCourses: () => courses, log, getBrowserKind: () => browserSettings.kind, discoverBrowser: () => (checkinOptions.discoverBrowser || browserDiscovery)({ kind: browserSettings.kind }) });
   const requestCheckin = () => checkin.tick().catch(error => log(error.message));
   const dependenciesReady = checkDependencies || (async () => {
     try {
@@ -111,13 +138,14 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   async function state() {
     const list = await Promise.all(courses.map(async course => ({ ...course, checkin: checkin.courseState(course), statusLabel: statuses[course.status] || '需要处理', phaseLabel: phases[course.phase] || '', costs: await costs(course.id) })));
     return { brand: 'szu-uooc', csrf, environment, connection, configError, config: { ...(config || defaults), api_key: undefined, hasKey: Boolean(config?.api_key) },
-      courses: list, checkin: checkin.state(), browser: browserSession.state(), activeIds: [...active.keys()], activeId: [...active.keys()][0] || null, queueRunning, logs, shuttingDown };
+      courses: list, checkin: checkin.state(), browser: { ...browserSession.state(), needsCourseRefresh: browserSettings.needsCourseRefresh, selectionRequired, choices: browserChoices }, activeIds: [...active.keys()], activeId: [...active.keys()][0] || null, queueRunning, logs, shuttingDown };
   }
 
   function selected(id) { const course = courses.find(course => course.id === String(id)); if (!course) throw new Error('找不到这门课程。'); return course; }
 
   async function startCourse(course) {
     if (shuttingDown) throw new Error('控制台正在关闭。');
+    if (browserSettings.needsCourseRefresh) throw new Error('切换浏览器后，请先连接并重新读取课程，确认是同一个账号。');
     if (active.has(course.id)) throw new Error('这门课程已经在运行。');
     if (active.size) throw new Error('先停止当前课程，再开始另一门。');
     if (environment.status !== 'ready') throw new Error('请等运行环境准备完成后再开始。');
@@ -162,7 +190,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       queueRunning = active.size > 0;
       if (current.stopped) { course.status = 'stopped'; course.error = ''; }
       else if (course.phase === 'complete' && code === 0) course.status = 'complete';
-      else { course.status = 'error'; course.error ||= '连接已中断，请检查 Chrome 登录、调试开关和授权后重试。'; }
+      else { course.status = 'error'; course.error ||= `连接已中断，请检查 ${browserTypes[browserSettings.kind].name} 登录、调试开关和授权后重试。`; }
       if (signal) log('课程连接已结束，已完成进度保留。', course.id);
       persist().catch(error => log(error.message));
     });
@@ -194,6 +222,9 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
     }
     if (action === 'remove') {
       if (worker) throw new Error('请先停止这门课程，再移除。');
+      const submissionOrigins = [...new Set([...(browserSettings.submissionOrigins || []), new URL(course.url).origin])];
+      const next = { ...browserSettings, submissionOrigins };
+      await saveJSON(browserFile, next); browserSettings = next;
       courses.splice(courses.indexOf(course), 1); return persist();
     }
     throw new Error('不支持这个操作。');
@@ -206,12 +237,32 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   }
 
   function nextConfig(body) {
-    return validateConfig({ answer_mode: body.answer_mode ?? config?.answer_mode ?? 'ai', base_url: body.base_url ?? config?.base_url ?? defaults.base_url, model: body.model ?? config?.model ?? defaults.model,
-      wire_api: 'responses', reasoning_effort: 'medium', budget: body.budget ?? config?.budget ?? defaults.budget,
-      pricing: body.pricing ?? config?.pricing ?? structuredClone(defaults.pricing), api_key: body.api_key || config?.api_key || '' });
+    const base = normalizeServiceURL(body.base_url ?? config?.base_url ?? defaults.base_url);
+    if (config?.api_key && base !== normalizeServiceURL(config.base_url) && !body.api_key) throw new Error('更换 API 网址后，请粘贴新服务对应的完整 Key；程序不会把原 Key 发给其他服务。');
+    const key = body.api_key || config?.api_key || '';
+    const model = body.model || config?.model || defaults.model;
+    const changed = base !== config?.base_url || key !== config?.api_key || model !== config?.model;
+    return validateConfig({ ...defaults, ...config, answer_mode: body.answer_mode ?? config?.answer_mode ?? 'ai', base_url: base, api_key: key, model,
+      budget: body.budget ?? config?.budget ?? defaults.budget,
+      ...(changed ? { profile: undefined, image_profile: undefined, detection: undefined, service_status: 'unchecked', pricing: null } : {}) });
   }
 
   async function mutate(route, body) {
+    if (route === '/api/browser-select') {
+      if (!Object.hasOwn(browserTypes, body.kind)) throw new Error('请选择 Chrome 或 Edge。');
+      if (active.size || queueRunning) throw new Error('先停止课程并等待已发出的解题请求处理完，再切换浏览器。');
+      if (checkin.state().running) throw new Error('签到正在执行，请稍后切换浏览器。');
+      if (body.sameAccount !== true) throw new Error('请确认两个浏览器使用同一个课程账号。');
+      if (body.kind === browserSettings.kind && !selectionRequired) return;
+      const submissionURLs = [...courses.map(course => course.url), ...(browserSettings.submissionOrigins || [])];
+      if (submissionURLs.length) await browserSession.assertSwitchable(submissionURLs);
+      await checkin.changeBrowser();
+      await browserSession.close();
+      const next = { ...browserSettings, kind: body.kind, needsCourseRefresh: true };
+      await saveJSON(browserFile, next); browserSettings = next; selectionRequired = false;
+      log(`已选择 ${browserTypes[body.kind].name}，请重新连接并核对账号及签到资料。`); return;
+    }
+    if (route === '/api/course-open') return browserSession.open('course', selected(body.id).url);
     if (route === '/api/browser-open') return browserSession.open(body.target);
     if (route === '/api/browser-connect') { await browserSession.get(); return; }
     if (route === '/api/browser-courses' || route === '/api/courses-import') {
@@ -223,7 +274,12 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
         if (existing) { if (!existing.customName && item.name) { existing.name = item.name; existing.nameSource = 'catalog'; } continue; }
         courses.push({ ...item, name: item.name || `课程 ${item.id}`, customName: false, nameSource: item.name ? 'catalog' : 'url', status: 'ready', completed: 0, total: 0, error: '', phase: '', currentTitle: '', checkinEnabled: false }); added++;
       }
-      await persist(); requestCheckin(); return { added };
+      await persist();
+      if (route === '/api/browser-courses' && browserSettings.needsCourseRefresh) {
+        const next = { ...browserSettings, needsCourseRefresh: false };
+        await saveJSON(browserFile, next); browserSettings = next;
+      }
+      requestCheckin(); return { added };
     }
     if (route === '/api/checkin-config') { await checkin.configure(body); requestCheckin(); return; }
     if (route === '/api/checkin-test') return checkin.testBrowser(body.profileDirectory);
@@ -248,11 +304,28 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       Object.assign(connection, { status: 'untested', message: '设置已保存，可以测试连接' });
       log('解题服务设置已保存。'); return;
     }
+    if (route === '/api/detect-save') {
+      if (active.size) throw new Error('先停止正在运行的课程，再修改解题服务设置。');
+      const settings = nextConfig({ ...body, answer_mode: 'ai' });
+      Object.assign(connection, { status: 'testing', message: '正在筛选并检测少量候选模型，请稍等…' });
+      try {
+        const result = await detectService({ ...settings, model: body.model || '', dataDir, fetchImpl, force: body.force === true });
+        const next = validateConfig({ ...settings, base_url: result.base_url, model: result.model, profile: result.profile, image_profile: result.image_profile,
+          pricing: result.profile?.pricing || null, wire_api: result.profile?.wire_api || 'responses', reasoning_effort: result.profile?.reasoning_effort,
+          service_status: result.status, detection: result });
+        await saveJSON(configFile, next); config = next; configError = '';
+        Object.assign(connection, { status: result.status === 'ready' ? 'ok' : 'error', message: result.message });
+        log('解题服务检测完成。'); return { detection: result, connection };
+      } catch (error) {
+        Object.assign(connection, { status: 'error', message: scrub(error.message).replaceAll(settings.api_key, '[已隐藏]') });
+        return { connection };
+      }
+    }
     if (route === '/api/test-connection') {
       const settings = nextConfig(body);
       if (settings.answer_mode === 'free') throw new Error('免费模式不使用解题服务，无需测试连接。');
       const tested = { status: 'testing', message: '正在测试连接' };
-      const savedMatch = config && JSON.stringify(settings) === JSON.stringify(config);
+      const savedMatch = config && isDeepStrictEqual(settings, config);
       if (savedMatch) Object.assign(connection, tested);
       try {
         const base = new URL(settings.base_url.replace(/\/+$/, '') + '/');
@@ -263,8 +336,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
         let models;
         try { models = JSON.parse(text).data; } catch { throw new Error('接口返回格式不正确，请核对地址。'); }
         if (!Array.isArray(models)) throw new Error('服务商未返回模型列表，请核对接口地址。');
-        if (!models.some(model => model.id === settings.model)) throw new Error('连接成功，但模型列表中没有所选模型，请核对模型名称。');
-        Object.assign(tested, { status: 'ok', message: 'Key 和模型列表检查通过；解题能力在运行时确认' });
+        Object.assign(tested, { status: 'listed', message: '已读取模型列表，尚未验证调用能力。请点击「检测并保存」，程序会自动筛选和测试模型。' });
       } catch (error) { Object.assign(tested, { status: 'error', message: scrub(error.message).replaceAll(settings.api_key, '[已隐藏]') }); }
       if (savedMatch) Object.assign(connection, tested);
       return { connection: tested };
@@ -303,7 +375,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
     throw new Error('找不到这个操作。');
   }
 
-  const assets = { '/': ['console.html', 'text/html; charset=utf-8'], '/console.css': ['console.css', 'text/css; charset=utf-8'], '/console.js': ['console.js', 'text/javascript; charset=utf-8'] };
+  const assets = { '/': ['console.html', 'text/html; charset=utf-8'], '/console.css': ['console.css', 'text/css; charset=utf-8'], '/console.js': ['console.js', 'text/javascript; charset=utf-8'], '/user-guidance.mjs': ['user-guidance.mjs', 'text/javascript; charset=utf-8'] };
   function json(response, status, data) { response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); response.end(JSON.stringify(data)); }
   const server = http.createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store'); response.setHeader('Referrer-Policy', 'no-referrer'); response.setHeader('X-Content-Type-Options', 'nosniff');
@@ -317,6 +389,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       const authenticated = (request.headers.cookie || '').split(';').some(cookie => cookie.trim() === `szu_session=${token}`);
       if (!authenticated) { json(response, 401, { error: '控制台会话已过期，请重新双击启动。' }); return; }
       if (request.method === 'GET' && url.pathname === '/api/state') { json(response, 200, await state()); return; }
+      if (request.method === 'GET' && url.pathname === '/api/browsers') { json(response, 200, { browsers: await listBrowsers() }); return; }
       if (request.method === 'GET' && url.pathname === '/api/checkin-profiles') {
         const browser = await checkin.profiles(); json(response, 200, { available: browser.available, profiles: browser.profiles, error: browser.error }); return;
       }
