@@ -12,7 +12,7 @@ import { checkinURL, discoverBrowser, browserTypes } from './checkin-browser.mjs
 import { normalizeServiceURL } from '../api-protocol.mjs';
 import { detectService } from './service-detection.mjs';
 
-const phases = { opening: '打开学习资源', connecting: '等待浏览器授权', loading_catalog: '读取课程目录', video: '播放视频', solving: '准备答案', awaiting_verification: '等待网站验证', submitting: '提交测验', paused: '已暂停', complete: '已完成' };
+const phases = { opening: '打开学习资源', connecting: '等待浏览器授权', recovering: '正在恢复', loading_catalog: '读取课程目录', video: '播放视频', solving: '准备答案', awaiting_verification: '等待网站验证', submitting: '提交测验', paused: '已暂停', complete: '已完成' };
 const statuses = { ready: '未开始', queued: '等待运行', starting: '正在连接', running: '运行中', pausing: '正在暂停', paused: '已暂停', stopping: '正在停止', stopped: '已停止', error: '需要处理', complete: '已完成' };
 
 export async function createConsole({ appDir, dataDir, spawnController, browserOptions = {}, fetchImpl = fetch, checkDependencies, installDependencies, checkinOptions = {} } = {}) {
@@ -62,6 +62,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   let dependencyChild;
   let installing;
   let savedQueue = Promise.resolve();
+  let savedLog = Promise.resolve();
   let mutations = Promise.resolve();
   const logs = [];
   const environment = { status: 'checking', message: '正在检查运行环境', output: '' };
@@ -71,13 +72,28 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   let origin;
 
   const scrub = value => String(value ?? '').replaceAll(config?.api_key || '\0', '[已隐藏]').replace(/(?:sk-|sess-)[a-z0-9_-]+|Bearer\s+\S+/gi, '[已隐藏]').slice(0, 1000);
-  const log = (message, courseId) => { logs.push({ at: new Date().toISOString(), message: scrub(message), courseId }); if (logs.length > 100) logs.shift(); };
+  const logFile = path.join(dataDir, 'recovery-log.json');
+  try {
+    const previous = await readJSON(logFile, []);
+    if (Array.isArray(previous)) for (const item of previous.slice(-100)) {
+      if (item && typeof item.message === 'string') logs.push({ at: item.at, message: scrub(item.message), courseId: item.courseId });
+    }
+  } catch { logs.push({ at: new Date().toISOString(), message: '原运行记录不可读，已重新记录；课程与费用账本保留。' }); }
+  const log = (message, courseId) => {
+    logs.push({ at: new Date().toISOString(), message: scrub(message), courseId }); if (logs.length > 100) logs.shift();
+    const snapshot = structuredClone(logs);
+    savedLog = savedLog.then(() => saveJSON(logFile, snapshot)).catch(() => {
+      logs.push({ at: new Date().toISOString(), message: '运行记录保存失败，请检查本机磁盘空间和目录权限。', courseId });
+      if (logs.length > 100) logs.shift();
+    });
+  };
   const browserSession = createBrowserSession({ appDir, dataDir, log, ...browserOptions, getBrowserKind: () => browserSettings.kind });
   const launchController = spawnController || browserSession.spawnWorker;
   function persist() {
     const snapshot = structuredClone({ courses });
-    savedQueue = savedQueue.then(() => saveJSON(queueFile, snapshot));
-    return savedQueue;
+    const saving = savedQueue.then(() => saveJSON(queueFile, snapshot));
+    savedQueue = saving.catch(() => {});
+    return saving;
   }
   const checkin = await createCheckin({ ...checkinOptions, appDir, dataDir, getCourses: () => courses, log, getBrowserKind: () => browserSettings.kind, discoverBrowser: () => (checkinOptions.discoverBrowser || browserDiscovery)({ kind: browserSettings.kind }) });
   const requestCheckin = () => checkin.tick().catch(error => log(error.message));
@@ -173,9 +189,11 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       if (message?.type !== 'state') return;
       const status = message.state;
       if (!status || String(status.courseId) !== course.id) return;
+      const changed = course.phase !== status.phase || course.error !== scrub(status.error || '');
       for (const key of ['phase', 'completed', 'total', 'lockedUnits', 'currentTitle']) course[key] = status[key];
       if (message.title && !course.customName && course.nameSource !== 'catalog') course.name = scrub(message.title).slice(0, 120);
       course.error = scrub(status.error || '');
+      if (changed) log(`任务 ${status.sourceId || ''}：${phases[course.phase] || course.phase}${course.error ? '；' + course.error : ''}`, course.id);
       if (!['stopping', 'pausing'].includes(course.status)) course.status = status.phase === 'complete' ? 'complete' : status.phase === 'paused' ? 'paused' : 'running';
       if (course.status === 'pausing' && !status.active) course.status = 'paused';
       persist().catch(error => log(error.message));
@@ -440,6 +458,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
     }));
     await browserSession.close();
     await savedQueue;
+    await savedLog;
     await new Promise(resolve => server.close(resolve));
   }
   await persist();

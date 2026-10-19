@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.23
+// @version      0.10.0-local.24
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.23';
+  const SCRIPT_VERSION = '0.10.0-local.24';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -334,6 +334,7 @@
     try {
       pageWindow.szuUoocDebug = {
         version: SCRIPT_VERSION,
+        stopCourse,
         snapshot() {
           const snapshot = getDiagnosticSnapshot();
           log('诊断快照', snapshot);
@@ -2775,7 +2776,10 @@
     const current = normalizeUrl(video.currentSrc || video.src);
     const next = sources.find((url) => url !== current && !state.attemptedSources.has(url));
     if (!next) {
-      if (state.course.active) { pauseCourseWithError('视频加载或播放停滞，已尝试可用线路，请切到课程检查后继续'); return false; }
+      if (state.course.active) {
+        if (current && recoverCourseMedia(video, '视频加载或播放停滞，已尝试可用线路')) return true;
+        pauseCourseWithError('视频加载或播放停滞，已尝试可用线路，请切到课程检查后继续'); return false;
+      }
       setTimeout(() => playNextVideo(), state.config.nextDelay);
       return false;
     }
@@ -2970,11 +2974,15 @@
     };
     state.catalogRequestCount += 1;
     log('请求课程资源', { request, requestNumber: state.catalogRequestCount });
-    const promise = Promise.resolve(courseService.getUnitLearn(request))
+    const runId = state.course.active ? state.course.runId : null;
+    const cancelled = () => runId != null && (!state.course.active || state.course.runId !== runId);
+    const promise = retryCourseOperation('catalog:' + [request.cid, request.chapter_id, request.section_id, request.subsection_id].join(':'), () => courseService.getUnitLearn(request), cancelled, runId)
       .then((response) => {
+        if (cancelled() || state.unitSourcePromises.get(node) !== promise) throw stoppedCourseError();
         const candidates = [response, response && response.data, response && response.data && response.data.data, response && response.data && response.data.unitSource, response && response.unitSource, response && response.list, response && response.items];
         if (!candidates.some(Array.isArray)) throw new Error('课程资源接口未返回数组');
         node.unitSource = extractSourceList(response);
+        state.catalogFailures.delete(node);
         log('课程资源读取完成', {
           chapterId: route.chapterId,
           sectionId: route.sectionId,
@@ -2984,6 +2992,7 @@
         return node.unitSource;
       })
       .catch((error) => {
+        if (state.unitSourcePromises.get(node) !== promise || cancelled() || error?.code === 'COURSE_STOPPED') return [];
         state.unitSourcePromises.delete(node);
         if (String(error && error.code) === '600' && /^(该章节未发布资源|该章节尚未发布资源)$/.test(error.msg || '')) {
           state.catalogUnpublished.add(node);
@@ -2996,6 +3005,7 @@
           return [];
         }
         state.catalogFailures.add(node);
+        state.catalogFailureReason = courseErrorMessage(error);
         logError('读取课程资源失败', { request, error });
         return [];
       });
@@ -3685,17 +3695,79 @@
   const COURSE_BILLING_KEY = 'szu-uooc:billing:';
   // The provider currently adds about 4,380 hidden input tokens (~3,840 cached); recheck this reserve if its prefix changes.
   const COURSE_AI_EXTRA_INPUT_RESERVE = 16384;
+  const COURSE_OPERATION_TIMEOUT = 15000;
+  const COURSE_MAX_ATTEMPTS = 3;
+
+  function stoppedCourseError() { const error = new Error('自动课程已停止'); error.code = 'COURSE_STOPPED'; return error; }
+  function courseErrorMessage(error) { return String(error?.message || error?.msg || error || '未知错误'); }
+  function temporaryCourseError(error) {
+    const status = Number(error?.status || error?.code);
+    if (status) return [408, 425, 429].includes(status) || status >= 500 && status < 600;
+    return error?.code === 'COURSE_TIMEOUT' || /network|failed to fetch|load failed|网络|连接|超时/i.test(courseErrorMessage(error));
+  }
+
+  function boundedCourseOperation(operation, cancelled, label) {
+    return new Promise((resolve, reject) => {
+      const deadline = Date.now() + COURSE_OPERATION_TIMEOUT;
+      let settled = false;
+      const finish = (callback, value) => { if (settled) return; settled = true; clearInterval(timer); callback(value); };
+      const timer = setInterval(() => {
+        if (cancelled()) return finish(reject, stoppedCourseError());
+        if (Date.now() >= deadline) { const error = new Error(label + '响应超时'); error.code = 'COURSE_TIMEOUT'; finish(reject, error); }
+      }, 100);
+      Promise.resolve().then(() => { if (cancelled()) throw stoppedCourseError(); return operation(); }).then(
+        value => finish(cancelled() ? reject : resolve, cancelled() ? stoppedCourseError() : value),
+        error => finish(reject, error),
+      );
+    });
+  }
+
+  async function retryCourseOperation(label, operation, cancelled = () => false, runId = null) {
+    const c = state.course, counts = runId == null ? {} : c.recoveryCounts;
+    let lastError;
+    while ((counts[label] || 0) < COURSE_MAX_ATTEMPTS) {
+      if (cancelled()) throw stoppedCourseError();
+      const attempt = (counts[label] || 0) + 1;
+      if (attempt > 1) {
+        const delay = 1000 * 2 ** (attempt - 2);
+        const retryAt = Date.now() + delay;
+        if (runId != null) { c.recoveryAttempt = attempt - 1; c.recoveryOperation = label; c.recoveryReason = courseErrorMessage(lastError || c.recoveryReason); c.nextRetryAt = retryAt; c.recoveryResult = 'waiting'; publishCourseState(); }
+        logWarning('课程恢复等待', { operation: label, attempt, maxAttempts: COURSE_MAX_ATTEMPTS, delay, reason: courseErrorMessage(lastError || c.recoveryReason) });
+        await waitForCondition(() => Date.now() >= retryAt, { timeout: delay + 500, interval: 100, isCancelled: cancelled });
+        if (cancelled()) throw stoppedCourseError();
+      }
+      counts[label] = attempt;
+      if (runId != null) { c.nextRetryAt = 0; publishCourseState(true); }
+      try {
+        const value = await boundedCourseOperation(operation, cancelled, label);
+        delete counts[label];
+        if (attempt > 1) { if (runId != null) { c.recoveryResult = 'recovered'; publishCourseState(); } log('课程恢复成功', { operation: label, attempt }); }
+        return value;
+      } catch (error) {
+        if (cancelled() || error?.code === 'COURSE_STOPPED') throw stoppedCourseError();
+        lastError = error;
+        if (!temporaryCourseError(error)) throw error;
+      }
+    }
+    if (runId != null) { c.recoveryResult = 'exhausted'; c.nextRetryAt = 0; publishCourseState(); }
+    throw new Error(label + '有限重试已耗尽：' + courseErrorMessage(lastError || c.recoveryReason));
+  }
 
   function coursePublicState() {
     const c = state.course;
     return { courseId: c.courseId || getCourseId(), sourceId: c.sourceId, runId: c.runId, phase: c.phase, active: c.active,
-      error: c.error, total: c.total, completed: c.completed, lockedUnits: state.catalogLocked.size, currentTitle: c.currentTitle, quizUrl: c.quizUrl, verificationAttempt: c.verificationAttempt || 0 };
+      error: c.error, total: c.total, completed: c.completed, lockedUnits: state.catalogLocked.size, currentTitle: c.currentTitle, quizUrl: c.quizUrl, verificationAttempt: c.verificationAttempt || 0,
+      heartbeatAt: c.heartbeatAt || 0, progressAt: c.progressAt || 0, recoveryAttempt: c.recoveryAttempt || 0, recoveryOperation: c.recoveryOperation || '', recoveryReason: c.recoveryReason || '', recoveryResult: c.recoveryResult || '', nextRetryAt: c.nextRetryAt || 0, pendingSubmit: Boolean(c.pendingSubmit) };
   }
 
   function publishCourseState(requireSaved = false) {
-    if (state.course.courseId) {
-      try { localStorage.setItem(COURSE_STATE_KEY + state.course.courseId, JSON.stringify({ active: state.course.active, index: state.course.index, completed: state.course.completed, total: state.course.total, sourceId: state.course.sourceId, pendingSubmit: state.course.pendingSubmit || null })); } catch (_) { if (requireSaved) throw new Error('交卷记录保存失败，已暂停，未提交'); }
-    }
+    const c = state.course, progressKey = [c.phase, c.sourceId, c.completed, c.index].join(':');
+    if (c.progressKey !== progressKey) { c.progressKey = progressKey; c.progressAt = Date.now(); }
+    if (c.courseId && !c.checkpointBlocked && c.lockCourseId === c.courseId && c.releaseLock) {
+      const saved = JSON.stringify({ version: 2, active: c.active, phase: c.phase, index: c.index, completed: c.completed, total: c.total, sourceId: c.sourceId, pendingSubmit: c.pendingSubmit || null, recoveryCounts: c.recoveryCounts || {}, recoveryReason: c.recoveryReason || '', videoPosition: c.videoPosition || null });
+      try { if (requireSaved || localStorage.getItem(COURSE_STATE_KEY + c.courseId) !== saved) localStorage.setItem(COURSE_STATE_KEY + c.courseId, saved); } catch (_) { if (requireSaved) throw new Error('课程断点保存失败，已暂停' + (c.pendingSubmit ? '，未提交' : '')); }
+    } else if (requireSaved) throw new Error('课程并发锁未持有，断点未保存，已阻止后续操作');
+    if (!c.active && !c.starting && c.releaseLock) c.releaseLock();
     let node = document.getElementById('szu-uooc-course-state');
     if (!node) { node = document.createElement('script'); node.id = 'szu-uooc-course-state'; node.type = 'application/json'; (document.head || document.documentElement).appendChild(node); }
     const value = JSON.stringify(coursePublicState());
@@ -3716,6 +3788,21 @@
 
   function readCourseJson(key, fallback) {
     try { return JSON.parse(localStorage.getItem(key) || 'null') || fallback; } catch (_) { return fallback; }
+  }
+
+  function readCourseCheckpoint(id) {
+    try {
+      const raw = localStorage.getItem(COURSE_STATE_KEY + id);
+      if (raw === null) return null;
+      const saved = JSON.parse(raw);
+      if (!saved || typeof saved !== 'object' || Array.isArray(saved) || saved.version != null && saved.version !== 2 || saved.active != null && typeof saved.active !== 'boolean') throw new Error('格式无效');
+      for (const key of ['index', 'completed', 'total']) if (saved[key] != null && (!Number.isSafeInteger(saved[key]) || saved[key] < 0)) throw new Error(key + '无效');
+      const pending = saved.pendingSubmit;
+      if (pending != null && (typeof pending !== 'object' || Array.isArray(pending) || String(pending.courseId) !== id || !/^\d+$/.test(String(pending.sourceId || '')) || !/^\d+$/.test(String(pending.task_id || '')) || !Number.isFinite(pending.at) || pending.at < 0)) throw new Error('交卷记录无效');
+      if (saved.recoveryCounts != null && (typeof saved.recoveryCounts !== 'object' || Array.isArray(saved.recoveryCounts) || Object.values(saved.recoveryCounts).some(value => !Number.isInteger(value) || value < 0 || value > COURSE_MAX_ATTEMPTS))) throw new Error('恢复次数无效');
+      if (saved.videoPosition != null && (typeof saved.videoPosition !== 'object' || !/^\d+$/.test(String(saved.videoPosition.sourceId || '')) || !Number.isFinite(saved.videoPosition.time) || saved.videoPosition.time < 0)) throw new Error('视频断点无效');
+      return saved;
+    } catch (error) { throw new Error('课程断点读取失败（' + courseErrorMessage(error) + '），已保留原记录；请人工核对交卷与学习状态后处理'); }
   }
 
   function courseCacheKey(courseId, q) {
@@ -3859,29 +3946,59 @@
 
   function currentCourseTask() { const c = state.course; return c.active && c.courseId === getCourseId() ? c.tasks[c.index] || null : null; }
 
+  async function acquireCourseLock(id, runId) {
+    const c = state.course;
+    if (c.lockCourseId === id && c.releaseLock) return true;
+    if (c.releaseLock) c.releaseLock();
+    if (!navigator.locks?.request) throw new Error('浏览器不支持课程并发锁，请使用支持 Web Locks 的浏览器后继续');
+    return new Promise((resolve, reject) => {
+      navigator.locks.request('szu-uooc:course:' + id, { ifAvailable: true }, async lock => {
+        if (!lock || c.runId !== runId) { resolve(false); return; }
+        await new Promise(release => { c.lockCourseId = id; c.releaseLock = () => { c.lockCourseId = ''; c.releaseLock = null; release(); }; resolve(true); });
+      }).catch(reject);
+    });
+  }
+
   async function startCourse() {
     const c = state.course, id = getCourseId();
+    if (c.starting) return;
     if (!id) { c.error = '无法识别课程ID'; c.phase = 'paused'; publishCourseState(); return; }
-    const savedCourse = readCourseJson(COURSE_STATE_KEY + id, null);
-    const pendingSubmit = savedCourse && savedCourse.pendingSubmit && String(savedCourse.pendingSubmit.courseId) === id ? savedCourse.pendingSubmit : null;
+    c.starting = true; c.resumeChecked = true;
     const runId = ++c.runId;
-    state.config.enabled = true; state.config.autoPlay = true; state.config.autoNext = true; saveConfig();
-    Object.assign(c, { active: true, phase: 'loading_catalog', error: '', courseId: id, sourceId: '', tasks: [], index: 0, total: 0, totalCourseTasks: 0, completed: 0, handledVideoEnds: new Set(), videoEndRunId: -1, videoEndSourceId: '', quizSolving: false, commitOpened: false, submitClicked: false, pendingSubmit, awaitingSuccess: false, successClicked: false });
-    publishCourseState();
     try {
+      let acquired;
+      try { acquired = await acquireCourseLock(id, runId); }
+      catch (error) { if (c.runId === runId) { c.checkpointBlocked = true; pauseCourseWithError(courseErrorMessage(error)); } return; }
+      if (c.runId !== runId) return;
+      if (!acquired) { c.checkpointBlocked = true; pauseCourseWithError('其他标签正在运行同一课程，请停止该标签后再继续'); return; }
+      let savedCourse;
+      try { savedCourse = readCourseCheckpoint(id); c.checkpointBlocked = false; }
+      catch (error) { c.courseId = id; c.checkpointBlocked = true; c.resumeChecked = true; pauseCourseWithError(courseErrorMessage(error)); return; }
+      const pendingSubmit = savedCourse && savedCourse.pendingSubmit && String(savedCourse.pendingSubmit.courseId) === id ? savedCourse.pendingSubmit : null;
+      state.config.enabled = true; state.config.autoPlay = true; state.config.autoNext = true;
+      Object.assign(c, { active: true, phase: 'loading_catalog', error: '', courseId: id, sourceId: '', tasks: [], index: 0, total: 0, totalCourseTasks: 0, completed: 0, handledVideoEnds: new Set(), videoEndRunId: -1, videoEndSourceId: '', quizSolving: false, commitOpened: false, submitClicked: false, pendingSubmit, awaitingSuccess: false, successClicked: false, resumeChecked: true,
+        recoveryCounts: savedCourse?.active ? savedCourse.recoveryCounts || {} : {}, recoveryAttempt: 0, nextRetryAt: 0, recoveryOperation: '', recoveryReason: savedCourse?.active ? savedCourse.recoveryReason || '' : '', recoveryResult: '', videoPosition: savedCourse?.videoPosition || null, restoreVideoPosition: Boolean(savedCourse?.videoPosition), mediaRecovering: false });
+      state.unitSourcePromises = new WeakMap();
+      publishCourseState(true);
+      saveConfig();
       const learn = await waitForCondition(() => {
         const scope = getLearnScope();
         return scope && Array.isArray(scope.chapterList) && scope.chapterList.length ? scope : null;
       }, { timeout: 30000, interval: 250, isCancelled: () => !c.active || c.runId !== runId });
+      if (!c.active || c.runId !== runId) return;
       if (!learn) throw new Error('课程目录加载超时');
       const units = buildCatalogUnits(learn.chapterList, id);
       state.catalogFailures.clear();
+      state.catalogFailureReason = '';
       state.catalogUnpublished.clear();
       state.catalogLocked.clear();
       let pendingStillUnfinished = false, pendingFound = false;
       for (const unit of units) {
-        if (runId !== c.runId) return;
+        if (!c.active || runId !== c.runId) return;
+        // After an interruption the server, rather than the cached Angular catalog, owns completion.
+        if (savedCourse?.active || pendingSubmit) delete unit.node.unitSource;
         const sources = await loadUnitSources(unit.node, unit.route);
+        if (!c.active || runId !== c.runId) return;
         for (const source of sources) {
           if (pendingSubmit && String(source.id) === String(pendingSubmit.sourceId) && String(source.task_id || source.id) === String(pendingSubmit.task_id)) {
             pendingFound = true;
@@ -3899,7 +4016,7 @@
         }
       }
       if (runId !== c.runId) return;
-      if (state.catalogFailures.size) throw new Error('课程目录部分请求失败，暂停以避免漏掉任务');
+      if (state.catalogFailures.size) throw new Error('课程目录部分请求失败，暂停以避免漏掉任务：' + state.catalogFailureReason);
       if (pendingSubmit && !pendingFound) throw new Error('上次交卷记录对应的任务未出现在目录中；请核对课程目录后重试');
       if (pendingStillUnfinished) {
         c.active = false; c.phase = 'paused'; c.error = '检测到上次交卷仍未被目录确认完成；请人工核对该测验状态后再继续';
@@ -3915,7 +4032,8 @@
       persistCourseState();
       publishCourseState();
       courseAdvance(runId);
-    } catch (error) { pauseCourseWithError(error.message || String(error)); }
+    } catch (error) { if (c.active && c.runId === runId) pauseCourseWithError(courseErrorMessage(error)); }
+    finally { c.starting = false; if (!c.active && c.releaseLock) c.releaseLock(); }
   }
 
   function persistCourseState(requireSaved = false) { publishCourseState(requireSaved); }
@@ -3928,13 +4046,15 @@
     const ready = () => String(getCurrentSourceId()) === String(task.id) && (task.kind === 'video' ? Boolean(findNativeVideo()) : collectLiveQuestions(task).length > 0);
     if (ready()) return true;
     const cancelled = () => !c.active || c.runId !== runId;
-    const clicked = navigateToEntry(task.entry);
+    const clicked = clickCatalogSource(task.entry);
     if (clicked && await waitForCondition(ready, { timeout: 3000, interval: 100, isCancelled: cancelled })) return true;
     if (cancelled()) return false;
     const service = getStateService(), route = task.route;
     if (!service || typeof service.go !== 'function') throw new Error('学习资源未打开，请切到课程检查后继续');
-    await service.go(getTargetSourceState(route), { courseId: c.courseId, chapterId: route.chapterId, sectionId: route.sectionId, pointId: route.pointId || undefined, sourceId: task.id });
-    if (!await waitForCondition(ready, { timeout: 10000, interval: 100, isCancelled: cancelled }) && !cancelled()) throw new Error('学习资源未加载，请切到课程检查后继续');
+    await retryCourseOperation('opening:' + task.id, async () => {
+      await service.go(getTargetSourceState(route), { courseId: c.courseId, chapterId: route.chapterId, sectionId: route.sectionId, pointId: route.pointId || undefined, sourceId: task.id });
+      if (!await waitForCondition(ready, { timeout: 10000, interval: 100, isCancelled: cancelled }) && !cancelled()) { const error = new Error('学习资源加载超时'); error.code = 'COURSE_TIMEOUT'; throw error; }
+    }, cancelled, runId);
     return !cancelled();
   }
 
@@ -3950,7 +4070,7 @@
         c.error = finished ? '' : '目录复查未确认全部视频和章节测验已finished';
         if (finished) c.completed = c.total;
         publishCourseState();
-      });
+      }).catch(error => { if (c.active && c.runId === runId) pauseCourseWithError(courseErrorMessage(error)); });
       return;
     }
     c.currentTitle = task.title; c.sourceId = task.id; c.quizUrl = task.kind === 'quiz' ? '/exam/' + (task.source.task_id || task.id) : '';
@@ -3962,7 +4082,7 @@
     } catch (error) {
       if (!c.active || c.runId !== runId) return;
       logError('课程资源打开失败', { error });
-      pauseCourseWithError('学习资源未打开，请切到课程检查后继续');
+      pauseCourseWithError('学习资源未打开，请切到课程检查后继续：' + courseErrorMessage(error));
     }
   }
 
@@ -4055,7 +4175,9 @@
         }
         const frameDoc = (currentQuestions[0] || questions[0]).container.ownerDocument;
         if (!c.submitClicked && !vmScope.vcode_params?.captchaVerifyParam && /验证失败/.test(frameDoc.querySelector('#commitConfirmDialog #sc')?.textContent || '') && !retryAt) {
+          if ((c.recoveryCounts['verification:' + task.id] || 0) >= COURSE_MAX_ATTEMPTS) { c.recoveryResult = 'exhausted'; throw new Error('网站验证连续失败，自动重试已达上限，请人工完成验证后继续'); }
           retryAt = Date.now() + retryDelay;
+          c.recoveryOperation = 'verification:' + task.id; c.recoveryAttempt = (c.recoveryCounts[c.recoveryOperation] || 0) + 1; c.recoveryReason = '网站验证失败'; c.nextRetryAt = retryAt; c.recoveryResult = 'waiting';
           c.error = '网站验证失败，' + retryDelay / 1000 + '秒后自动重试'; publishCourseState();
           retryDelay = Math.min(30000, retryDelay * 2);
         }
@@ -4073,8 +4195,10 @@
           const cancel = doc.querySelector('#commitConfirmDialog [ng-click="vm.cancelCommitTask()"],#commitConfirmDialog [data-action=cancel],#commitConfirmDialog .layui-layer-btn1');
           if (cancel) cancel.click();
           if (!c.active || c.runId !== runId) return;
+          c.recoveryCounts['verification:' + task.id] = (c.recoveryCounts['verification:' + task.id] || 0) + 1;
+          persistCourseState(true);
           vmScope.vm.commitTask();
-          openedAt = Date.now(); retryAt = 0; c.error = '';
+          openedAt = Date.now(); retryAt = 0; c.error = ''; c.nextRetryAt = 0; c.recoveryResult = 'reopened';
           c.verificationAttempt += 1; publishCourseState();
           await sleep(500); continue;
         }
@@ -4085,7 +4209,7 @@
           c.pendingSubmit = { courseId: c.courseId, sourceId: String(task.id), task_id: String(task.source.task_id || task.id), at: Date.now() };
           persistCourseState(true);
           if (!c.active || c.runId !== runId) return;
-          c.submitClicked = true; submittedAt = Date.now(); retryAt = 0; c.error = ''; c.phase = 'submitting'; publishCourseState(); confirm.click();
+          c.submitClicked = true; submittedAt = Date.now(); retryAt = 0; c.nextRetryAt = 0; c.error = ''; c.phase = 'submitting'; publishCourseState(); confirm.click();
         }
         const successDialog = Array.from(frameDoc.querySelectorAll('.layui-layer-content,[role=dialog]')).find((node) => /测验通过，可以继续后面的学习/.test(node.textContent || ''));
         if (successDialog && !c.successClicked) {
@@ -4212,6 +4336,7 @@
     delete task.node.unitSource;
     state.unitSourcePromises.delete(task.node);
     const list = await loadUnitSources(task.node, task.route);
+    if (state.catalogFailures.has(task.node)) throw new Error('任务完成状态读取失败：' + state.catalogFailureReason);
     const source = list.find((item) => String(item.id) === String(task.id));
     return Boolean(source && String(source.finished) === '1');
   }
@@ -4243,12 +4368,14 @@
 
   function stopCourse() {
     const c = state.course;
-    if (c.commitOpened && !c.submitClicked) { const doc = getQuizDocuments().find((item) => item.querySelector('#commitConfirmDialog')); const cancel = doc && doc.querySelector('#commitConfirmDialog [ng-click="vm.cancelCommitTask()"],#commitConfirmDialog [data-action=cancel],#commitConfirmDialog .layui-layer-btn1'); if (cancel) cancel.click(); }
-    c.runId += 1; c.quizSolving = false; c.active = false; c.phase = 'paused'; c.error = '用户停止';
-    state.config.enabled = false; state.config.autoPlay = false; state.config.autoNext = false; saveConfig();
+    if (c.commitOpened && !c.submitClicked) { try { const doc = getQuizDocuments().find((item) => item.querySelector('#commitConfirmDialog')); const cancel = doc && doc.querySelector('#commitConfirmDialog [ng-click="vm.cancelCommitTask()"],#commitConfirmDialog [data-action=cancel],#commitConfirmDialog .layui-layer-btn1'); if (cancel) cancel.click(); } catch (error) { logWarning('关闭原生验证弹窗失败，继续停止课程', courseErrorMessage(error)); } }
+    c.runId += 1; c.quizSolving = false; c.active = false; c.phase = 'paused'; c.error = '用户停止'; c.nextRetryAt = 0; c.mediaRecovering = false;
+    state.unitSourcePromises = new WeakMap(); state.navigating = false;
+    state.config.enabled = false; state.config.autoPlay = false; state.config.autoNext = false;
+    try { if (!c.checkpointBlocked && c.releaseLock) saveConfig(); } catch (error) { c.error += '；配置保存失败，请检查浏览器存储'; logWarning('停止时配置保存失败，继续安全暂停', courseErrorMessage(error)); }
     try { if (state.video) state.video.pause(); } catch (_) {}
     if (c.submitClicked) c.phase = 'paused';
-    publishCourseState();
+    try { publishCourseState(); } finally { if (c.releaseLock) c.releaseLock(); }
   }
 
   function courseVideoEnded() {
@@ -4261,16 +4388,18 @@
     if (!task || task.kind !== 'video' || task.id !== sourceId) { c.active = false; c.phase = 'paused'; c.error = '视频结束事件与课程任务不匹配'; publishCourseState(); return true; }
     c.videoEndRunId = runId; c.videoEndSourceId = sourceId;
     (async () => {
-      const until = Date.now() + 30000;
-      let finished = false;
-      while (c.active && c.runId === runId && Date.now() < until && !finished) {
-        finished = await refreshTaskFinished(task);
-        if (c.runId !== runId) return;
-        if (!finished) await sleep(2500);
-      }
-      if (!c.active || c.runId !== runId) return;
-      if (!finished) { c.active = false; c.phase = 'paused'; c.error = '视频结束后平台尚未确认完成'; publishCourseState(); return; }
-      c.handledVideoEnds.add(sourceId); c.completed += 1; c.index += 1; c.videoEndRunId = -1; c.videoEndSourceId = ''; persistCourseState(); courseRefreshAndAdvance(runId);
+      try {
+        const until = Date.now() + 30000;
+        let finished = false;
+        while (c.active && c.runId === runId && Date.now() < until && !finished) {
+          finished = await refreshTaskFinished(task);
+          if (c.runId !== runId) return;
+          if (!finished) await sleep(2500);
+        }
+        if (!c.active || c.runId !== runId) return;
+        if (!finished) { pauseCourseWithError('视频结束后平台尚未确认完成'); return; }
+        c.handledVideoEnds.add(sourceId); c.completed += 1; c.index += 1; c.videoEndRunId = -1; c.videoEndSourceId = ''; persistCourseState(); courseRefreshAndAdvance(runId);
+      } catch (error) { if (c.active && c.runId === runId) pauseCourseWithError(courseErrorMessage(error)); }
     })();
     return true;
   }
@@ -4317,19 +4446,78 @@
     const c = state.course;
     if (!c.active || c.phase !== 'video' || !video || video.ended || !state.mediaProgress) return;
     const now = Date.now(), time = Number(video.currentTime) || 0;
-    if (time > state.mediaProgress.time + 0.05) { state.mediaProgress = { time, at: now }; return; }
+    if (time > state.mediaProgress.time + 0.05) {
+      state.mediaProgress = { time, at: now }; c.progressAt = now;
+      if (!c.videoPosition || c.videoPosition.sourceId !== c.sourceId || Math.abs(time - c.videoPosition.time) >= 5) {
+        c.videoPosition = { sourceId: c.sourceId, time }; persistCourseState();
+      }
+      return;
+    }
     if (now - state.mediaProgress.at < 30000) return;
     state.mediaProgress = { time, at: now };
     tryNextSource(video);
   }
 
+  function restoreCourseVideoPosition(video) {
+    const c = state.course, saved = c.videoPosition;
+    if (!c.restoreVideoPosition || !saved || saved.sourceId !== c.sourceId || !Number.isFinite(video.duration)) return;
+    c.restoreVideoPosition = false;
+    if (!Number.isFinite(saved.time) || saved.time <= 0 || saved.time >= video.duration || Number(video.currentTime) >= saved.time) return;
+    // Resume only observed playback; completion still requires native ended plus server confirmation.
+    try { video.currentTime = saved.time; } catch (_) {}
+  }
+
+  function recoverCourseMedia(video, reason) {
+    const c = state.course, task = currentCourseTask(), runId = c.runId;
+    if (!task || task.kind !== 'video' || c.pendingSubmit) return false;
+    if (c.mediaRecovering) return true;
+    const key = 'media:' + task.id, attempt = (c.recoveryCounts[key] || 0) + 1;
+    if (attempt >= COURSE_MAX_ATTEMPTS) { c.recoveryResult = 'exhausted'; return false; }
+    c.mediaRecovering = true;
+    if (video && Number(video.currentTime) > 0) c.videoPosition = { sourceId: task.id, time: Number(video.currentTime) };
+    c.restoreVideoPosition = true;
+    c.recoveryCounts[key] = attempt; c.recoveryAttempt = attempt; c.recoveryOperation = key; c.recoveryReason = reason; c.recoveryResult = 'waiting';
+    const delay = 1000 * 2 ** (attempt - 1), retryAt = Date.now() + delay;
+    c.nextRetryAt = retryAt;
+    const cancelled = () => !c.active || c.runId !== runId || c.sourceId !== task.id;
+    (async () => {
+      try {
+        persistCourseState(true);
+        logWarning('视频恢复等待', { sourceId: task.id, attempt, delay, reason });
+        await waitForCondition(() => Date.now() >= retryAt, { timeout: delay + 500, interval: 100, isCancelled: cancelled });
+        if (cancelled()) return;
+        c.nextRetryAt = 0;
+        if (video?.isConnected && attempt === 1) {
+          video.load();
+        } else {
+          const service = getStateService();
+          if (!service?.go) throw new Error('找不到当前视频的原生重开入口');
+          await boundedCourseOperation(() => service.go(getTargetSourceState(task.route), { ...task.route, pointId: task.route.pointId || undefined, sourceId: task.id }, { reload: true }), cancelled, '重新打开视频');
+        }
+        if (cancelled()) return;
+        const current = await waitForCondition(() => String(getCurrentSourceId()) === task.id && findNativeVideo(), { timeout: 10000, interval: 100, isCancelled: cancelled });
+        if (cancelled()) return;
+        if (!current) throw new Error('恢复后视频元素未加载');
+        restoreCourseVideoPosition(current); applyMediaSettings(current, true);
+        state.mediaProgress = { time: Number(current.currentTime) || 0, at: Date.now() };
+        c.recoveryResult = 'reopened'; publishCourseState();
+        log('视频恢复执行', { sourceId: task.id, attempt, stage: attempt === 1 ? 'reload' : 'native-route' });
+      } catch (error) { if (!cancelled()) pauseCourseWithError(reason + '；自动恢复失败：' + courseErrorMessage(error)); }
+      finally { if (c.runId === runId) { c.mediaRecovering = false; c.nextRetryAt = 0; publishCourseState(); } }
+    })();
+    return true;
+  }
+
   function scan() {
+    state.course.heartbeatAt = Math.floor(Date.now() / 1000) * 1000;
     if (enforceMasterConfig()) saveConfig();
     const controlPage = getControlPage();
     if (!state.course.active && !state.course.resumeChecked && getCourseId()) {
-      const saved = readCourseJson(COURSE_STATE_KEY + getCourseId(), null);
-      if (saved && saved.active) { if (getLearnScope()) startCourse(); }
-      else state.course.resumeChecked = true;
+      try {
+        const saved = readCourseCheckpoint(getCourseId());
+        if (saved && saved.active) { if (getLearnScope()) startCourse(); }
+        else state.course.resumeChecked = true;
+      } catch (error) { state.course.courseId = getCourseId(); state.course.checkpointBlocked = true; state.course.resumeChecked = true; pauseCourseWithError(courseErrorMessage(error)); }
     }
     if (state.course.active && getCourseId() && getCourseId() !== state.course.courseId) stopCourse();
     if (controlPage.playback) patchBackgroundPausePolicy();
@@ -4341,7 +4529,10 @@
       refreshControls();
     }
     const video = controlPage.playback && findNativeVideo();
-    if (video && !handleCourseVideoQuiz(video)) { bindVideo(video); checkCourseVideoProgress(video); }
+    if (video && !handleCourseVideoQuiz(video)) { bindVideo(video); if (state.course.active && state.course.phase === 'video') restoreCourseVideoPosition(video); checkCourseVideoProgress(video); }
+    else if (!video && state.course.active && state.course.phase === 'video' && Date.now() - state.course.progressAt > 30000) {
+      if (!recoverCourseMedia(null, '当前视频元素持续未加载')) pauseCourseWithError('当前视频元素持续未加载，自动恢复已达上限，请检查页面后继续');
+    }
   }
 
   function hasVisibleQuizQuestions(doc) {
@@ -4668,8 +4859,9 @@
             : '讨论未运行';
         const course = state.course;
         box.querySelector('[data-role="state"]').textContent = course.active ? `${course.phase} · 已读任务 ${course.completed}/${course.total}${state.catalogLocked.size ? ` · ${state.catalogLocked.size} 个目录单元待解锁` : ''} · ${course.currentTitle}` : course.error || `${state.config.speed}倍速 · ${state.config.autoNext ? '连播' : '不连播'} · ${themeLabel} · ${discussionDetail}`;
-        box.querySelector('[data-action="course-start"]').disabled = course.active;
-        box.querySelector('[data-action="course-stop"]').disabled = !course.active;
+        const courseStart = box.querySelector('[data-action="course-start"]'), courseStop = box.querySelector('[data-action="course-stop"]');
+        if (courseStart) courseStart.disabled = course.active || course.starting;
+        if (courseStop) courseStop.disabled = !course.active && !course.starting;
       };
       state.controlsUpdate = update;
       box.addEventListener('click', (event) => {

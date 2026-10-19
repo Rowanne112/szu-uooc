@@ -76,14 +76,15 @@ async function save(file, ledger) {
 // Serialize each course ledger across controllers; other courses run independently.
 const requestQueues = new Map();
 
-export function createAPI(config, ledgerDir, fetchImpl = fetch) {
+export function createAPI(config, ledgerDir, fetchImpl = fetch, onRecovery = () => {}) {
   const base = new URL(normalizeServiceURL(config.base_url) + '/');
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) throw new Error('API 配置必须是无凭据参数的 HTTPS 地址');
   const endpoint = endpointFor(base.href);
   let pending = Promise.resolve();
   const resumedUnknown = new Set();
+  const recoveryLog = message => { try { onRecovery(message); } catch { /* Logging cannot change a paid request's outcome. */ } };
 
-  async function request(courseId, details, automaticResumeIds) {
+  async function request(courseId, details, automaticResumeIds, mayDispatch) {
     if (!/^\d+$/.test(String(courseId))) throw new Error('无法核实本次解题所属课程');
     if (details.method !== 'POST' || details.url !== endpoint) throw new Error('控制器只代理配置中的解题接口');
     const payload = JSON.parse(details.data);
@@ -134,13 +135,23 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
     ledger.requests.push(entry);
     await save(file, ledger);
 
+    let dispatchable = true;
+    if (mayDispatch) { try { dispatchable = await mayDispatch(); } catch { dispatchable = false; } }
+    if (!dispatchable) {
+      Object.assign(entry, { status: 'known', cost_nanos: 0, cost_usd: 0, reserved_nanos: 0, not_sent: true });
+      await save(file, ledger);
+      throw Object.assign(new Error('课程已暂停，未发送解题请求'), { notSent: true });
+    }
+
+    let timeoutSignal;
     let stage = 'connecting';
     try {
+      timeoutSignal = AbortSignal.timeout(Math.min(120000, Math.max(5000, details.timeout || 60000)));
       const response = await fetchImpl(endpointFor(base.href, profile.wire_api), {
         method: 'POST', redirect: 'error',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.api_key}`, 'User-Agent': 'Codex/0.156.0' },
         body: JSON.stringify(wireRequest({ ...payload, model: profile.id }, profile)),
-        signal: AbortSignal.timeout(Math.min(120000, Math.max(5000, details.timeout || 60000))),
+        signal: timeoutSignal,
       });
       entry.http_status = response.status;
       stage = 'receiving';
@@ -156,7 +167,13 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
         const excerpt = message.replaceAll(config.api_key, '[redacted]').replace(/(?:sk-|sess-)[a-z0-9_-]+|Bearer\s+\S+/gi, '[redacted]').slice(0, 400);
         entry.provider_error = { type: safeCode(providerError?.type), code: safeCode(providerError?.code), reason, message: excerpt };
         const retryAfter = response.headers.get('retry-after');
-        if (retryAfter && /^\d{1,7}$/.test(retryAfter)) entry.retry_after_seconds = Number(retryAfter);
+        if (retryAfter !== null) {
+          let seconds = NaN;
+          if (/^\d+$/.test(retryAfter)) seconds = Number(retryAfter);
+          else if (/^[A-Z][a-z]{2}, \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT$/.test(retryAfter)) seconds = Math.max(0, Math.ceil((Date.parse(retryAfter) - Date.now()) / 1000));
+          if (Number.isFinite(seconds)) entry.retry_after_seconds = seconds;
+          else entry.retry_after_invalid = true;
+        }
       }
       stage = 'decoding';
       const data = normalizeResponse(decoded || decodeResponse(text));
@@ -175,7 +192,9 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
       return { status: response.status, responseText: JSON.stringify({ model: profile.id, status: 'completed', output: [{ content: output }], usage, local_billing: { model: profile.id, cost_usd: cost, price_kind: profile.price_kind || 'confirmed', input_bound: inputBound } }) };
     } catch (error) {
       entry.failure_stage = ['connecting','receiving','decoding','accounting'].includes(error.stage) ? error.stage : stage;
-      entry.failure_type = ['Error','SyntaxError','TypeError','TimeoutError','AbortError'].includes(error.name) ? error.name : 'Error';
+      // Some fetch implementations wrap the deadline's reason in a generic AbortError.
+      const failureType = error.name === 'AbortError' && timeoutSignal?.aborted && timeoutSignal.reason?.name === 'TimeoutError' ? 'TimeoutError' : error.name;
+      entry.failure_type = ['Error','SyntaxError','TypeError','TimeoutError','AbortError'].includes(failureType) ? failureType : 'Error';
       if (entry.status !== 'known') {
         entry.status = 'unknown';
         await save(file, ledger);
@@ -187,7 +206,7 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
       if ([401, 403].includes(entry.http_status)) failure.message = `解题服务 HTTP ${entry.http_status}：Key 无效或没有调用权限。请重新复制完整 Key，点击「检测并保存」后继续；原请求的费用记录保留。`;
       else if (entry.http_status && entry.http_status !== 200 && entry.http_status !== 502) failure.message = `${serviceProblem(entry.http_status, { error: entry.provider_error })}（HTTP ${entry.http_status}；${entry.status === 'known' ? '已记录用量与费用' : '费用未知，预留保留'}）`;
       if (entry.http_status === 429 && ['请求频率限制', '并发限制'].includes(entry.provider_error?.reason)
-        && (entry.retry_after_seconds === undefined || entry.retry_after_seconds <= 60)) failure.retryAfterMs = (entry.retry_after_seconds ?? 15) * 1000;
+        && !entry.retry_after_invalid && (entry.retry_after_seconds === undefined || entry.retry_after_seconds <= 60)) failure.retryAfterMs = (entry.retry_after_seconds ?? 15) * 1000;
       if (entry.status === 'unknown' && entry.http_status === 200 && entry.failure_stage === 'receiving' && ['TimeoutError', 'TypeError'].includes(entry.failure_type)) {
         failure.retryAfterMs = 10000;
         failure.resumeRequestId = entry.id;
@@ -201,23 +220,35 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch) {
     const scope = path.join(path.resolve(ledgerDir), 'course-' + courseId);
     const call = (requestQueues.get(scope) || Promise.resolve()).then(async () => {
       const automaticResumeIds = new Set();
+      const recoveryAttempts = { stream: 0, rate: 0 };
       let lastFailure;
       for (let attempt = 0; attempt < 3; attempt++) {
-        if (mayDispatch && !await mayDispatch()) throw lastFailure || Object.assign(new Error('课程已暂停，未发送解题请求'), { notSent: true });
+        if (mayDispatch && !await mayDispatch()) {
+          if (lastFailure) recoveryLog(`课程 ${courseId}：自动恢复已取消，未再发送解题请求。`);
+          throw lastFailure || Object.assign(new Error('课程已暂停，未发送解题请求'), { notSent: true });
+        }
         try {
-          const result = await request(courseId, details, automaticResumeIds);
+          const result = await request(courseId, details, automaticResumeIds, mayDispatch);
           for (const id of automaticResumeIds) resumedUnknown.add(courseId + ':' + id);
+          if (attempt) recoveryLog(`课程 ${courseId}：解题服务自动恢复成功（重试 ${attempt}/2），此前费用预留已保留。`);
           return result;
         }
         catch (error) {
+          if (error.notSent && lastFailure) { recoveryLog(`课程 ${courseId}：自动恢复已取消，未再发送解题请求。`); throw lastFailure; }
           // Retry only a live managed task; every earlier reservation remains in its budget.
           if (attempt === 2 && error.retryAfterMs !== undefined && mayDispatch) error.message = error.resumeRequestId
             ? '解题服务响应连续中断（HTTP 200），已自动补跑 2 次；课程已暂停，请稍后继续或更换解题服务。费用预留已保留。'
             : '解题服务持续限流（HTTP 429），已自动重试 2 次；课程已暂停，请稍后继续或更换解题服务。费用预留已保留。';
-          if (attempt === 2 || error.retryAfterMs === undefined || !mayDispatch || !await mayDispatch()) throw error;
+          if (attempt === 2 || error.retryAfterMs === undefined || !mayDispatch || !await mayDispatch()) {
+            if (attempt) recoveryLog(`课程 ${courseId}：解题服务自动恢复停止（重试 ${attempt}/2）：${error.message}`);
+            throw error;
+          }
           lastFailure = error;
           if (error.resumeRequestId) automaticResumeIds.add(error.resumeRequestId);
-          await timers.setTimeout(error.retryAfterMs * (error.resumeRequestId ? automaticResumeIds.size : 1));
+          const kind = error.resumeRequestId ? 'stream' : 'rate';
+          const delayMs = error.retryAfterMs * 2 ** recoveryAttempts[kind]++;
+          recoveryLog(`课程 ${courseId}：${kind === 'stream' ? '响应流中断（HTTP 200）' : '服务限流（HTTP 429）'}，${delayMs / 1000} 秒后自动重试 ${attempt + 1}/2；费用预留已保留。`);
+          await timers.setTimeout(delayMs);
         }
       }
     });
