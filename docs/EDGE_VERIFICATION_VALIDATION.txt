@@ -1,0 +1,123 @@
+v0.1.14 / userscript 0.10.0-local.26
+
+修复人工验证通过后，误报“验证弹窗已关闭，点击继续重新打开”并暂停的问题。
+
+- 人工快速提交时，在网站关闭弹窗、清空验证状态之前保存交卷记录，等待平台确认后继续。
+- 试卷内嵌页刷新后，提交监听器跟随新页面，避免漏记人工提交。
+- 弹窗短暂隐藏不再被立即误判为关闭；主动取消仍暂停，未确认交卷不重复提交。
+- 最终验证流程 36/36、相关恢复 27/27 通过；安装包 32 项文件 SHA-256 校验通过。脚本版本 `0.10.0-local.26`。
+
+更新：旧控制台「设置 → 退出程序」，完整解压新版后双击「启动-Windows.cmd」或「启动-Mac.command」。原设置、进度和费用记录保留。
+
+Windows Edge 实机与真实验证挑战尚未验收。请完成一次人工验证并保持课程页打开，观察是否自动进入下一节。
+
+回归证据：
+原版在快速人工提交、弹窗短暂隐藏两项均复现相同暂停提示。
+内嵌页刷新后快速人工提交也有独立失败复现。
+最终完整验证分三组，每组 12 项，合计 36/36 通过；相关恢复 27/27 通过。
+测试使用独立 Chromium 与模拟课程，不访问真实课程或付费解题服务。
+
+✔ free mode fills missing choice answers without a Key, reuses them on verification retry and never caches random answers (13261.828083ms)
+✔ free mode maps 11 random 0.99 to native option ids without an empty answer (4682.53675ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (16786.259666ms)
+✔ human verification during a pending retry submits once without reopening (4663.333708ms)
+✔ pause cancels a scheduled verification retry (4198.787084ms)
+✔ a transient native click error keeps the controller connected and retries after five seconds (10768.456333ms)
+✔ replacing a quiz with different question text while AI is pending cannot apply or submit the earlier answer (2564.671708ms)
+✔ a native verification callback can retain the course source id instead of the exam id (4587.779708ms)
+✔ explicitly cancelling native verification still pauses without submitting (6633.730625ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (2562.646583ms)
+✔ a second copy of the course script cannot overwrite a live runner with idle state (5320.541458ms)
+✔ an original course tab can finish its login redirect before the controller validates its URL (3152.893666ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 81277.92375
+
+✔ free mode keeps known answers and leaves missing fill answers for a human (7928.527375ms)
+✔ free mode maps 20 random 0.1 to native option ids without an empty answer (4650.751833ms)
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (12866.573ms)
+✔ verification retry restores answers after the same quiz iframe and its answer model are replaced (8832.560208ms)
+✔ stop cancels a scheduled verification retry (4120.219792ms)
+✔ a delayed click from an older verification attempt cannot click a reopened widget (7728.344583ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (7650.130875ms)
+✔ a fast human submit waits for delayed platform completion after verification state is cleared (12616.834875ms)
+✔ briefly hidden native verification can return after the dialog has been open for three seconds (12668.491958ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (2631.923708ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (2618.749ms)
+✔ three videos naturally end in sequence and the following chapter quiz completes without external clicks (8680.269375ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 93169.768875
+
+✔ free mode maps 11 random 0.1 to native option ids without an empty answer (5159.066834ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (6860.756292ms)
+✔ repeated verification failures wait the full backoff and pause after three reopen attempts (11820.719375ms)
+✔ human verification during retry answer synchronization keeps its new scope result (4710.3435ms)
+✔ changed questions cannot reopen verification using an earlier answer (4753.263042ms)
+✔ the same quiz iframe can be replaced while waiting for AI and receives its answers without another request (4703.388959ms)
+✔ a human verification callback that replaces the page model continues the same task without restart (6666.311208ms)
+✔ a fast human submit after quiz iframe replacement waits for platform completion without reopening (14748.837292ms)
+✔ a verification callback from another task cannot submit the current quiz (4615.010208ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (6680.69325ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (5039.452583ms)
+✔ persistent native verification click errors exhaust three attempts and safely wait for a human (21147.655958ms)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 98776.476084
+
+FINAL {"tests": 36, "pass": 36, "fail": 0, "shards": [{"shard": 1, "exit_code": 0, "tests": 12, "pass": 12, "fail": 0}, {"shard": 2, "exit_code": 0, "tests": 12, "pass": 12, "fail": 0}, {"shard": 3, "exit_code": 0, "tests": 12, "pass": 12, "fail": 0}]}
+
+✔ queued paid requests cannot survive a new run or a document reload with the same runId (1132.594083ms)
+✔ a delayed image is rejected after resuming the same task in a new run (448.818708ms)
+✔ a missing state channel recovers with a bounded reload and resumes the saved course (813.163875ms)
+✔ a invalid state channel recovers with a bounded reload and resumes the saved course (772.313667ms)
+✔ a persistent missing state channel exhausts a finite backoff budget and safely pauses (1437.736958ms)
+✔ user pause cancels recovery while the DOM state is unavailable and survives a reload (973.073042ms)
+✔ a pending submission blocks automatic page replay and reports a manual pause (701.411791ms)
+✔ a brief missing snapshot returns without a reload or manual pause (762.771166ms)
+✔ a transient observational hook failure is logged without terminating the active course (656.570583ms)
+✔ a checkpoint with an unconfirmed submission blocks recovery even before the first readable snapshot (663.261458ms)
+✔ a malformed checkpoint stops the managed document without restarting a runner (614.724541ms)
+✔ fresh heartbeats do not create progress logs or duplicate state events (700.53725ms)
+✔ a dead script heartbeat recovers but an active bounded retry retains ownership (837.654875ms)
+✔ a duplicate controller for the same saved course is rejected before browser operations and releases the lock after stop (626.5415ms)
+✔ an initial page load timeout keeps monitoring and starts when the DOM becomes usable (483.66725ms)
+✔ a recovery navigation timeout can still observe a successfully restored script (670.188375ms)
+✔ stop interrupts page recovery backoff and retains the original browser tab (955.134292ms)
+✔ pause still stops the real runner when the stop button is removed (524.095458ms)
+✔ losing both stop interfaces terminates the old document without discarding a pending submission and can resume manually (552.673459ms)
+✔ stop destroys an uncontrolled active document when both ordinary stop interfaces are lost (652.815667ms)
+✔ stop also terminates a runner whose stop API, button and DOM state have all disappeared (504.581542ms)
+✔ a stop evaluate that never answers reaches its host deadline and terminates the old document (3526.666ms)
+✔ task-level recovery reasons, attempts and results reach persistent console logging once per change (701.765ms)
+✔ emergency pause never overwrites a checkpoint acquired by another course tab (622.542667ms)
+✔ a pause whose checkpoint write fails cannot restart after storage recovers and the user reloads (2644.178583ms)
+图片验收：题干与图片选项实际发送、标签对应、原生答案键映射、读图失败和缺少识图模型时停止。全部使用自带测试图及模拟 AI。
+填空验收：题库、模拟 AI 和缓存保留多空顺序、重复答案及代码空白；保存值失真、题库冲突、空数不符和空答案均阻止提交。无真实平台或付费请求。
+✔ tests/course-controller.test.cjs (45729.85925ms)
+课程恢复：网络断开/无响应与导航超时自动恢复，持续503有限退避，401安全暂停，媒体重载→原生重开→耗尽暂停，恢复预算跨刷新，播放断点不冒充完成，停止后迟到响应不污染新任务。无真实平台或付费请求。
+✔ tests/course-recovery.test.cjs (10207.787875ms)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 47453.341125

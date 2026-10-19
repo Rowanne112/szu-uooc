@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.25
+// @version      0.10.0-local.26
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.25';
+  const SCRIPT_VERSION = '0.10.0-local.26';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -4091,6 +4091,13 @@
     const c = state.course;
     if (c.quizSolving) return;
     c.quizSolving = true;
+    let submitDocument, observeSubmit;
+    const observeSubmitIn = doc => {
+      if (submitDocument === doc) return;
+      submitDocument?.removeEventListener('click', observeSubmit, true);
+      submitDocument = doc;
+      submitDocument.addEventListener('click', observeSubmit, true);
+    };
     try {
       let questions = await waitForCondition(() => collectLiveQuestions(task), { timeout: 20000, interval: 250, isCancelled: () => !c.active || c.runId !== runId });
       if (!questions || !questions.length) throw new Error('测验题目未加载');
@@ -4119,6 +4126,7 @@
         if (!currentVm?.vm?.task || String(currentVm.vm.task.type) !== '10') throw new Error('当前页面不是可自动提交的章节测验，已暂停');
         questions = fresh; vmScope = currentVm;
         quiz.forEach((item, i) => item.live = fresh[i]);
+        if (observeSubmit) observeSubmitIn(questions[0].container.ownerDocument);
         return true;
       };
       const applyAnswers = async () => {
@@ -4158,10 +4166,30 @@
       } else if (!await refreshBinding()) return;
       if (!await applyAnswers()) return;
       if (typeof vmScope.vm.commitTask !== 'function') throw new Error('找不到原生提交入口；请返回课程目录后重试');
+      let dialogMissingSince = 0, retryAt = 0, retryDelay = 5000, submittedAt = 0;
+      const recordSubmission = liveQuestions => {
+        assertQuizBinding(task, liveQuestions);
+        c.pendingSubmit = { courseId: c.courseId, sourceId: String(task.id), task_id: String(task.source.task_id || task.id), at: Date.now() };
+        persistCourseState(true);
+        c.submitClicked = true; submittedAt = Date.now(); retryAt = 0; c.nextRetryAt = 0; c.error = ''; c.phase = 'submitting'; publishCourseState();
+      };
+      observeSubmit = event => {
+        if (!c.active || c.runId !== runId || c.submitClicked) return;
+        const button = event.target.closest?.('#commitConfirmDialog [ng-click="vm.doCommitTask()"]');
+        if (!button?.getClientRects().length || button.disabled) return;
+        try {
+          const liveQuestions = collectLiveQuestions(task);
+          assertQuizBinding(task, liveQuestions);
+          const liveVm = climbScope(findQuestionScope(liveQuestions[0].container, liveQuestions[0].win).scope, scope => scope.vm);
+          if (String(liveVm?.vm?.task?.type) !== '10' || !liveVm.vcode_params?.captchaVerifyParam) return;
+          // Record native human submission before the website clears its verification model.
+          recordSubmission(liveQuestions);
+        } catch (error) { event.preventDefault(); event.stopImmediatePropagation(); pauseCourseWithError(courseErrorMessage(error)); }
+      };
+      observeSubmitIn(questions[0].container.ownerDocument);
       c.phase = 'awaiting_verification'; c.commitOpened = true;
       vmScope.vm.commitTask();
       c.verificationAttempt = (c.verificationAttempt || 0) + 1; publishCourseState();
-      let openedAt = Date.now(), retryAt = 0, retryDelay = 5000, submittedAt = 0;
       let nextReview = 0;
       while (c.active && c.runId === runId) {
         const currentQuestions = collectLiveQuestions(task);
@@ -4175,6 +4203,7 @@
           vmScope = currentVm;
         }
         const frameDoc = (currentQuestions[0] || questions[0]).container.ownerDocument;
+        observeSubmitIn(frameDoc);
         if (!c.submitClicked && !vmScope.vcode_params?.captchaVerifyParam && /验证失败/.test(frameDoc.querySelector('#commitConfirmDialog #sc')?.textContent || '') && !retryAt) {
           if ((c.recoveryCounts['verification:' + task.id] || 0) >= COURSE_MAX_ATTEMPTS) { c.recoveryResult = 'exhausted'; throw new Error('网站验证连续失败，自动重试已达上限，请人工完成验证后继续'); }
           retryAt = Date.now() + retryDelay;
@@ -4199,18 +4228,16 @@
           c.recoveryCounts['verification:' + task.id] = (c.recoveryCounts['verification:' + task.id] || 0) + 1;
           persistCourseState(true);
           vmScope.vm.commitTask();
-          openedAt = Date.now(); retryAt = 0; c.error = ''; c.nextRetryAt = 0; c.recoveryResult = 'reopened';
+          dialogMissingSince = 0; retryAt = 0; c.error = ''; c.nextRetryAt = 0; c.recoveryResult = 'reopened';
           c.verificationAttempt += 1; publishCourseState();
           await sleep(500); continue;
         }
         const buttons = Array.from(frameDoc.querySelectorAll('#commitConfirmDialog button,[lay-filter*=commit]'));
         const confirm = frameDoc.querySelector('#commitConfirmDialog [ng-click="vm.doCommitTask()"]') || buttons.find((button) => /确认提交|确定提交/.test(button.textContent || ''));
         if (confirm?.getClientRects().length && !confirm.disabled && vmScope.vcode_params && vmScope.vcode_params.captchaVerifyParam && !c.submitClicked) {
-          assertQuizBinding(task, currentQuestions);
-          c.pendingSubmit = { courseId: c.courseId, sourceId: String(task.id), task_id: String(task.source.task_id || task.id), at: Date.now() };
-          persistCourseState(true);
+          recordSubmission(currentQuestions);
           if (!c.active || c.runId !== runId) return;
-          c.submitClicked = true; submittedAt = Date.now(); retryAt = 0; c.nextRetryAt = 0; c.error = ''; c.phase = 'submitting'; publishCourseState(); confirm.click();
+          confirm.click();
         }
         const successDialog = Array.from(frameDoc.querySelectorAll('.layui-layer-content,[role=dialog]')).find((node) => /测验通过，可以继续后面的学习/.test(node.textContent || ''));
         if (successDialog && !c.successClicked) {
@@ -4219,7 +4246,11 @@
           if (!successButton) throw new Error('测验成功提示缺少原生确认按钮');
           successButton.click();
         }
-        if (Date.now() < nextReview) { await sleep(500); continue; }
+        const dialogMissing = !c.submitClicked && !retryAt && !vmScope.vcode_params?.captchaVerifyParam && !confirm?.getClientRects().length && !successDialog;
+        if (dialogMissing) dialogMissingSince ||= Date.now();
+        else dialogMissingSince = 0;
+        const dialogClosed = dialogMissingSince && Date.now() - dialogMissingSince > 3000;
+        if (Date.now() < nextReview && !dialogClosed) { await sleep(500); continue; }
         nextReview = Date.now() + 3000;
         const finished = await refreshTaskFinished(task);
         if (!c.active || c.runId !== runId || c.courseId !== getCourseId() || String(c.sourceId) !== String(task.id)) return;
@@ -4228,12 +4259,12 @@
           c.completed += 1; c.index += 1; c.quizSolving = false; c.commitOpened = false; c.submitClicked = false; c.successClicked = false; persistCourseState();
           c.phase = 'loading_catalog'; publishCourseState(); return courseRefreshAndAdvance(runId);
         }
-        if (!c.submitClicked && !retryAt && !vmScope.vcode_params?.captchaVerifyParam && !confirm?.getClientRects().length && !successDialog && Date.now() - openedAt > 3000) throw new Error('验证弹窗已关闭，点击继续重新打开');
+        if (dialogClosed) throw new Error('验证弹窗已关闭，点击继续重新打开');
         if (c.submitClicked && Date.now() - submittedAt > 1800000) throw new Error('等待测验完成超时');
         await sleep(500);
       }
     } catch (error) { if (c.active && c.runId === runId) { pauseCourseWithError(error.message || String(error)); } }
-    finally { if (c.runId === runId) c.quizSolving = false; }
+    finally { submitDocument?.removeEventListener('click', observeSubmit, true); if (c.runId === runId) c.quizSolving = false; }
   }
 
   function randomCourseAnswer(question) {
