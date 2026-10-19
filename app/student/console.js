@@ -104,7 +104,7 @@ async function refresh() {
 async function api(route, data = {}) {
   if (!state) throw new Error('控制台尚未连接，请稍后重试。');
   const response = await fetch(route, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Szu-Token': state.csrf }, body: JSON.stringify(data) });
-  const result = await response.json(); if (!response.ok) throw new Error(result.error || '操作没有完成');
+  const result = await response.json(); if (!response.ok) throw Object.assign(new Error(result.error || '操作没有完成'), { requiresSubmissionConfirmation: result.requiresSubmissionConfirmation === true });
   await refresh(); return result;
 }
 async function runAction(fn) {
@@ -140,6 +140,7 @@ function serviceActions(message) {
 async function openDialog(name) {
   if (name === 'browser') {
     $('#browser-error').textContent = ''; $('#browser-same-account').checked = false;
+    $('#browser-submission-field').hidden = true; $('#browser-submission-confirmed').checked = false; $('#browser-submission-confirmed').required = false;
     try {
       const response = await fetch('/api/browsers'); const data = await response.json(); if (!response.ok) throw new Error(data.error);
       $('#browser-kind').innerHTML = data.browsers.map(browser => `<option value="${esc(browser.kind)}" ${browser.installed ? '' : 'disabled'}>${esc(browser.name)}${browser.installed ? '' : '（未安装）'}</option>`).join('');
@@ -209,13 +210,21 @@ async function loadProfiles(selected = $('#checkin-profile').value) {
   } catch (error) { $('#checkin-profile-note').textContent = explainProblem(error.message, browserName()); }
   finally { $('#checkin-profile').disabled = false; }
 }
+$('#browser-kind').addEventListener('change', () => {
+  $('#browser-error').textContent = '';
+  $('#browser-submission-field').hidden = true; $('#browser-submission-confirmed').checked = false; $('#browser-submission-confirmed').required = false;
+});
 $('#browser-form').addEventListener('submit', event => {
   event.preventDefault(); if (busy) return;
   runAction(async () => {
     try {
-      await api('/api/browser-select', { kind: $('#browser-kind').value, sameAccount: $('#browser-same-account').checked });
+      await api('/api/browser-select', { kind: $('#browser-kind').value, sameAccount: $('#browser-same-account').checked, submissionConfirmed: $('#browser-submission-confirmed').checked });
       guideStep = 'login'; guideError = ''; $('#browser-dialog').close(); toast('已保存，请在所选浏览器核对账号并重新读取课程。');
-    } catch (error) { $('#browser-error').textContent = explainProblem(error.message, browserName()); }
+    } catch (error) {
+      $('#browser-submission-field').hidden = !error.requiresSubmissionConfirmation;
+      $('#browser-submission-confirmed').required = error.requiresSubmissionConfirmation === true; $('#browser-submission-confirmed').checked = false;
+      $('#browser-error').textContent = error.requiresSubmissionConfirmation ? error.message : explainProblem(error.message, browserName());
+    }
   });
 });
 $('#checkin-mode').addEventListener('change', () => $('#checkin-time-field').hidden = $('#checkin-mode').value !== 'scheduled');

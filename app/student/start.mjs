@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, unlinkSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import childProcess from 'node:child_process';
 import { createConsole } from './console-server.mjs';
@@ -78,6 +79,8 @@ async function main() {
   const index = process.argv.indexOf('--data-dir');
   const dataDir = index < 0 ? defaultDataDir : path.resolve(process.argv[index + 1]);
   const readyIndex = process.argv.indexOf('--ready-file');
+  const manifest = await fs.readFile(path.resolve(appDir, '../文件校验.sha256')).catch(() => fs.readFile(path.join(appDir, 'student/console-server.mjs')));
+  const build = createHash('sha256').update(manifest).digest('hex');
   const markReady = async () => {
     if (readyIndex >= 0) { const { saveJSON } = await import('./settings.mjs'); await saveJSON(path.resolve(process.argv[readyIndex + 1]), { ready: true }); }
   };
@@ -87,10 +90,15 @@ async function main() {
   catch (error) {
     const address = await readJSON(path.join(dataDir, 'console-address.json'), null);
     if (address && /^http:\/\/127\.0\.0\.1:\d+\//.test(address.url)) {
+      let response;
       try {
-        const response = await fetch(address.url, { signal: AbortSignal.timeout(2000), redirect: 'manual' });
-        if (response.status === 303) { if (!process.argv.includes('--no-open')) openBrowser(address.url); await markReady(); console.log('已打开原来的控制台。'); return; }
+        response = await fetch(address.url, { signal: AbortSignal.timeout(2000), redirect: 'manual' });
       } catch {}
+      if (response?.status === 303) {
+        if (!process.argv.includes('--no-open')) openBrowser(address.url);
+        if (address.appDir !== appDir || address.build !== build) throw new Error('旧版或另一文件夹的控制台仍在运行。请在旧控制台点击「设置 → 退出程序」，再双击新版启动文件；不要删除设置或费用记录。');
+        await markReady(); console.log('已打开原来的控制台。'); return;
+      }
     }
     throw error;
   }
@@ -101,7 +109,7 @@ async function main() {
   await saveAddress();
   async function saveAddress() {
     const { saveJSON } = await import('./settings.mjs');
-    await saveJSON(path.join(dataDir, 'console-address.json'), { url: consoleApp.url, pid: process.pid });
+    await saveJSON(path.join(dataDir, 'console-address.json'), { url: consoleApp.url, pid: process.pid, appDir, build });
   }
   if (!process.argv.includes('--no-open')) openBrowser(consoleApp.url);
   const close = async () => {

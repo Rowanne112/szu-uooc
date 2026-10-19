@@ -275,12 +275,14 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       if (body.sameAccount !== true) throw new Error('请确认两个浏览器使用同一个课程账号。');
       if (body.kind === browserSettings.kind && !selectionRequired) return;
       const submissionURLs = [...courses.map(course => course.url), ...(browserSettings.submissionOrigins || [])];
+      const manuallyConfirmed = body.submissionConfirmed === true && browserSession.state().status !== 'connected';
       // 未连接且尚未完成课程核对的新选择不能启动学习，允许直接改选。
-      if (submissionURLs.length && (!browserSettings.needsCourseRefresh || browserSession.state().status === 'connected')) await browserSession.assertSwitchable(submissionURLs);
+      if (submissionURLs.length && !manuallyConfirmed && (!browserSettings.needsCourseRefresh || browserSession.state().status === 'connected')) await browserSession.assertSwitchable(submissionURLs);
       await checkin.changeBrowser();
       await browserSession.close();
       const next = { ...browserSettings, kind: body.kind, needsCourseRefresh: true };
       await saveJSON(browserFile, next); browserSettings = next; selectionRequired = false;
+      if (manuallyConfirmed) log('已人工确认原浏览器停止学习及上次交卷结果；原浏览器交卷记录保留，未自动重放。');
       log(`已选择 ${browserTypes[body.kind].name}，请重新连接并核对账号及签到资料。`); return;
     }
     if (route === '/api/course-open') return browserSession.open('course', selected(body.id).url);
@@ -428,7 +430,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
         const [file, type] = assets[url.pathname]; response.writeHead(200, { 'Content-Type': type }); response.end(await fs.readFile(path.join(appDir, 'student', file))); return;
       }
       json(response, 404, { error: '找不到这个页面。' });
-    } catch (error) { json(response, 400, { error: scrub(error.message) }); }
+    } catch (error) { json(response, 400, { error: scrub(error.message), ...(error.requiresSubmissionConfirmation === true ? { requiresSubmissionConfirmation: true } : {}) }); }
   });
   let port = 0;
   try {

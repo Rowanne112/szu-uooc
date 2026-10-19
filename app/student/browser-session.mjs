@@ -187,7 +187,11 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
     return child;
   }
   async function assertSwitchable(courseURLs = []) {
-    const session = await get(), context = session.contexts()[0];
+    if (!browser?.isConnected()) {
+      if (status.status === 'connected') status.status = 'idle';
+      throw Object.assign(new Error(`暂时无法连接 ${name()} 自动核对上次测验。请先在课程网站核对测验结果，并停止原浏览器的学习，再勾选下方确认后切换；也可以重新连接 ${name()} 后重试。`), { requiresSubmissionConfirmation: true });
+    }
+    const context = browser.contexts()[0];
     if (!context) throw new Error('请先连接原浏览器，核对交卷结果后再切换。');
     let timer, cancelled = false;
     const inspect = async () => {
