@@ -275,7 +275,8 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       if (body.sameAccount !== true) throw new Error('请确认两个浏览器使用同一个课程账号。');
       if (body.kind === browserSettings.kind && !selectionRequired) return;
       const submissionURLs = [...courses.map(course => course.url), ...(browserSettings.submissionOrigins || [])];
-      if (submissionURLs.length) await browserSession.assertSwitchable(submissionURLs);
+      // 未连接且尚未完成课程核对的新选择不能启动学习，允许直接改选。
+      if (submissionURLs.length && (!browserSettings.needsCourseRefresh || browserSession.state().status === 'connected')) await browserSession.assertSwitchable(submissionURLs);
       await checkin.changeBrowser();
       await browserSession.close();
       const next = { ...browserSettings, kind: body.kind, needsCourseRefresh: true };
