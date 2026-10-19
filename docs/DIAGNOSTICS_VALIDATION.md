@@ -1,0 +1,15 @@
+# 导出诊断包
+
+入口为「设置 → 导出诊断包」。点击下载 `ShenYiShua-diagnostics-时间.zip`，使用者自行把文件发给维护者；程序不会自动上传，也不停止、重启或恢复课程。
+
+ZIP 只包含 `diagnostic.json`：程序脚本版本和构建指纹、系统/Node 版本、浏览器及组件状态、服务模式及模型、匿名课程进度/错误、最近 100 条运行记录和每课最近 100 条恢复事件。最多导出 200 门课，证据文件每个读取最多 128 KiB；缺失或损坏证据不阻止其余内容导出。
+
+按字段白名单重建报告，再清理当前 Key、会话/CSRF、课程名称/网址/编号、用户路径、邮箱、Cookie、Bearer、凭据字段和带标签的题干答案。排除原始配置、服务检测指纹、浏览器资料、账本、原始截图、页面正文和题目答案缓存。诊断文件只用于排查，无法还原登录态。
+
+压缩复用系统工具：Mac 的 `/usr/bin/zip`，Windows 自带 PowerShell 的 `Compress-Archive`；不新增依赖，也不要求用户安装 Python。临时目录使用私有目录，归档后清理，压缩失败可在原弹窗重试。
+
+验证：`node --test szu-uooc/tests/diagnostics.test.mjs szu-uooc/tests/console-server.test.mjs szu-uooc/tests/student-start.test.mjs szu-uooc/tests/user-guidance-ui.test.mjs`。
+
+覆盖 ZIP 实际解压、白名单及凭据/身份/题目内容排除、缺失和损坏证据、符号链接排除、未登录与跨站请求拒绝、课程运行中真实界面下载、失败后重试和导出前后工作进程不变。全部使用模拟课程及测试凭据。
+
+验收边界：Windows 压缩命令尚未实机运行；任意自由文本日志无法穷举全部个人信息表达，转发前可先查看 JSON。若控制台本身无法启动，仍需提供原来的启动错误日志。

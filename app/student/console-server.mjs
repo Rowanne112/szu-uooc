@@ -11,6 +11,7 @@ import { createCheckin } from './checkin.mjs';
 import { checkinURL, discoverBrowser, browserTypes } from './checkin-browser.mjs';
 import { normalizeServiceURL } from '../api-protocol.mjs';
 import { detectService } from './service-detection.mjs';
+import { diagnosticZip } from './diagnostics.mjs';
 
 const phases = { opening: '打开学习资源', connecting: '等待浏览器授权', recovering: '正在恢复', loading_catalog: '读取课程目录', video: '播放视频', solving: '准备答案', awaiting_verification: '等待网站验证', submitting: '提交测验', paused: '已暂停', complete: '已完成' };
 const statuses = { ready: '未开始', queued: '等待运行', starting: '正在连接', running: '运行中', pausing: '正在暂停', paused: '已暂停', stopping: '正在停止', stopped: '已停止', error: '需要处理', complete: '已完成' };
@@ -59,6 +60,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
   const active = new Map();
   let queueRunning = false;
   let shuttingDown = false;
+  let exportingDiagnostics = false;
   let dependencyChild;
   let installing;
   let savedQueue = Promise.resolve();
@@ -423,6 +425,15 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
       if (request.method === 'POST' && url.pathname.startsWith('/api/')) {
         if (request.headers.origin !== origin || request.headers['x-szu-token'] !== csrf || !request.headers['content-type']?.startsWith('application/json')) { json(response, 403, { error: '操作来源无效，请刷新控制台重试。' }); return; }
         const body = await requestBody(request);
+        if (url.pathname === '/api/diagnostics') {
+          if (exportingDiagnostics) { json(response, 429, { error: '诊断包正在生成，请稍后重试。' }); return; }
+          exportingDiagnostics = true;
+          try {
+            const zip = await diagnosticZip({ appDir, dataDir, courses: structuredClone(courses), logs: structuredClone(logs), browser: browserSession.state(), environment: { ...environment }, config: { ...config }, secrets: [token, csrf] });
+            response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="ShenYiShua-diagnostics-${new Date().toISOString().replace(/[:.]/g,'-')}.zip"` }); response.end(zip);
+          } finally { exportingDiagnostics = false; }
+          return;
+        }
         const call = mutations.then(() => mutate(url.pathname, body)); mutations = call.catch(() => {});
         const result = await call; json(response, 200, { ok: true, ...result }); return;
       }

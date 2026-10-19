@@ -283,6 +283,18 @@ document.addEventListener('click', event => {
   else { const input = action.dataset.serviceAction === 'key' ? $('#api-key') : $('#base-url'); input.focus(); input.select(); }
 });
 $('#stop-all').addEventListener('click', () => runAction(() => api('/api/queue', { action: 'stop' })));
+$('#export-diagnostics').addEventListener('click', async event => {
+  const button = event.currentTarget; button.disabled = true; button.textContent = '正在生成诊断包…'; $('#diagnostics-error').textContent = '';
+  try {
+    const response = await fetch('/api/diagnostics', { method:'POST', headers:{'Content-Type':'application/json','X-Szu-Token':state.csrf},body:'{}' });
+    if (!response.ok) throw new Error((await response.json()).error || '诊断包导出失败，请重试。');
+    const url = URL.createObjectURL(await response.blob()), link = document.createElement('a');
+    link.href = url; link.download = response.headers.get('Content-Disposition')?.match(/filename="([\w.-]+)"/)?.[1] || 'ShenYiShua-diagnostics.zip';
+    document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000);
+    toast('诊断包已下载，可将 ZIP 文件发给维护者。');
+  } catch (error) { $('#diagnostics-error').textContent = error.message; }
+  finally { button.disabled = closed; button.textContent = '导出诊断包'; }
+});
 document.addEventListener('click', async event => {
   const copy = event.target.closest('[data-copy-debug]');
   if (copy) {
