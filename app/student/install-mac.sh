@@ -2,6 +2,7 @@
 set -euo pipefail
 umask 077
 cd "$(dirname "$0")/../.."
+. app/student/network-mac.sh
 case "$(uname -m)" in
   arm64) arch=arm64 ;;
   x86_64) arch=x64 ;;

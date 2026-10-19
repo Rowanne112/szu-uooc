@@ -1,7 +1,8 @@
 #!/bin/bash
 cd "$(dirname "$0")" || exit 1
 umask 077
-if [ ! -f app/student/install-mac.sh ]; then echo "请重新下载并完整解压安装包，再在解压后的文件夹里双击「启动-Mac.command」。"; if [ -t 0 ]; then read -r -p "按回车关闭窗口。"; fi; exit 1; fi
+if [ ! -f app/student/install-mac.sh ] || [ ! -f app/student/network-mac.sh ]; then echo "请重新下载并完整解压安装包，再在解压后的文件夹里双击「启动-Mac.command」。"; if [ -t 0 ]; then read -r -p "按回车关闭窗口。"; fi; exit 1; fi
+. app/student/network-mac.sh
 /bin/bash app/student/install-mac.sh --node-only || { echo "请先照上面的步骤操作，再双击「启动-Mac.command」。"; if [ -t 0 ]; then read -r -p "按回车关闭窗口。"; fi; exit 1; }
 case "$(uname -m)" in
   arm64) runtime="runtime/mac-arm64/bin/node" ;;

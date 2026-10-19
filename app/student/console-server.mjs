@@ -100,7 +100,9 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
           const runtime = path.dirname(process.execPath);
           const npm = process.platform === 'win32' ? path.join(runtime, 'node_modules/npm/bin/npm-cli.js') : path.resolve(runtime, '../lib/node_modules/npm/bin/npm-cli.js');
           await new Promise((resolve, reject) => {
-            dependencyChild = spawn(process.execPath, [npm, 'ci', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org', '--cache', path.resolve(appDir, '../runtime/npm-cache')], {
+            const npmArgs = [npm, 'ci', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org', '--cache', path.resolve(appDir, '../runtime/npm-cache')];
+            const mac = process.platform === 'darwin';
+            dependencyChild = spawn(mac ? '/bin/bash' : process.execPath, mac ? ['-c', '. "$1" || exit; shift; exec "$@"', 'szu-download', path.join(appDir, 'student/network-mac.sh'), process.execPath, ...npmArgs] : npmArgs, {
               cwd: appDir, windowsHide: true,
               env: { ...process.env, PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1' }, stdio: ['ignore', 'pipe', 'pipe'],
             });
