@@ -18,6 +18,13 @@ try {
     throw '控制台启动超时，请检查电脑和网络后重新启动。'
 } catch {
     if ($output) { try { Add-Content -Encoding UTF8 $output $_.Exception.Message } catch {} }
-    Write-Host '请重新下载并完整解压安装包，再双击「启动-Windows.cmd」。仍不能打开时，把程序文件夹里的 runtime/launch 开头的日志文件发给帮你安装的人；不要删除已有设置和费用记录。'
+    Write-Host '程序启动失败。请把日志文件直接发给帮你安装的人，不用打开或拍照。'
+    Write-Host '在日志文件夹里，找到 start-error（可能显示为 start-error.log），以及 launch 开头的所有日志文件，把它们一起发送；找不到 start-error 时，先发送 launch 开头的日志文件。'
+    if ($root) {
+        $logs = Join-Path $root 'runtime'
+        Write-Host ('日志文件夹：' + $logs)
+        try { Start-Process -FilePath 'explorer.exe' -ArgumentList ('"{0}"' -f $logs) | Out-Null } catch {}
+    }
+    Write-Host '如果文件夹没有自动打开，请回到程序文件夹，双击 runtime 文件夹。不要删除已有设置和费用记录。'
     exit 1
 }

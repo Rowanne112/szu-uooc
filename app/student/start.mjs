@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { spawn } from 'node:child_process';
+import childProcess from 'node:child_process';
 import { createConsole } from './console-server.mjs';
 import { defaultDataDir, migrateSettings, readJSON } from './settings.mjs';
 export { validateCourseURL, validateConfig } from './settings.mjs';
@@ -24,7 +25,18 @@ export async function acquireStartLock(dir) {
     if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('启动记录异常，请检查本机配置目录里的 running.pid；不要删除费用账本。');
     try { process.kill(pid, 0); }
     catch (probe) {
-      if (probe.code !== 'ESRCH') throw probe;
+      if (probe.code !== 'ESRCH') {
+        let image;
+        if (process.platform === 'win32' && probe.code === 'EPERM') {
+          try {
+            const output = childProcess.execFileSync(path.win32.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tasklist.exe'), ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'], { encoding: 'utf8', windowsHide: true, timeout: 5000 });
+            const row = output.trim().match(/^"([^"]+)","(\d+)"/);
+            if (row && Number(row[2]) === pid) image = row[1];
+          } catch { /* Keep the lock when Windows cannot identify its owner. */ }
+        }
+        // The portable Windows launcher always runs node.exe; another image means this PID was reused.
+        if (!image || image.toLowerCase() === 'node.exe') throw probe;
+      }
       unlinkSync(file);
       return acquireStartLock(dir);
     }
