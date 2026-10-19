@@ -20,7 +20,10 @@ function toast(message, error = false) {
 function money(amount) { return amount === null ? '待核对' : amount > 0 && amount < .0001 ? '< $0.0001' : '$' + Number(amount || 0).toFixed(4); }
 function percent(course) { return course.total ? Math.max(0, Math.min(100, Math.round(course.completed / course.total * 100))) : 0; }
 function badge(course) { return `<span class="status ${esc(course.status)}"><i></i>${esc(course.statusLabel)}</span>`; }
-function progress(course) { return `<progress class="progress" value="${percent(course)}" max="100" aria-label="${esc(course.name)}进度">${percent(course)}%</progress>`; }
+function progress(course) {
+  if (course.lockedUnits > 0 || course.phase === 'loading_catalog') return `<p class="field-help">已读取任务（含视频和测验）；${course.lockedUnits > 0 ? `${Number(course.lockedUnits)} 个目录单元待解锁` : '正在读取目录'}，总任务数待确认</p>`;
+  return `<progress class="progress" value="${percent(course)}" max="100" aria-label="${esc(course.name)}任务进度">${percent(course)}%</progress>`;
+}
 function courseButton(course, action, text, cls = 'secondary') {
   const blocked = ['start', 'resume'].includes(action) && state.activeIds.some(id => id !== course.id);
   return `<button class="button ${cls}" data-course="${esc(course.id)}" data-action="${action}" ${busy || blocked ? 'disabled' : ''} ${blocked ? 'title="先停止当前课程，再开始另一门"' : ''}>${text}</button>`;
