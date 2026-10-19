@@ -33,8 +33,12 @@ temp=$(mktemp -d "$PWD/runtime/.download.XXXXXX")
 filename="node-v24.21.0-darwin-$arch.tar.gz"
 if [ ! -x "$node" ] || ! "$node" --version >/dev/null 2>&1 || [ ! -f "$runtime/lib/node_modules/npm/bin/npm-cli.js" ]; then
   echo "[1/3] 下载这台 Mac 的运行环境，请保持联网……"
-  curl --silent --show-error --fail --location --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 20 --max-time 900 \
-    "https://nodejs.org/dist/v24.21.0/$filename" -o "$temp/$filename"
+  if ! curl --silent --show-error --fail --location --proto '=https' --tlsv1.2 --connect-timeout 8 --max-time 180 \
+    "https://nodejs.org/dist/v24.21.0/$filename" -o "$temp/$filename"; then
+    echo "暂时连不上，正在自动切换下载地址，请稍等……"
+    curl --silent --show-error --fail --location --proto '=https' --tlsv1.2 --retry 2 --connect-timeout 10 --max-time 900 \
+      "https://cdn.npmmirror.com/binaries/node/v24.21.0/$filename" -o "$temp/$filename"
+  fi
   echo "[2/3] 校验并解压运行环境……"
   awk -v file="$filename" '$2 == file' 依赖校验.sha256 > "$temp/check.sha256"
   [ -s "$temp/check.sha256" ] || { echo "请重新下载并完整解压安装包，再双击「启动-Mac.command」。"; exit 1; }

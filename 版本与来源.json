@@ -4,5 +4,6 @@
   "answers": 1135,
   "dependencies_bundled": false,
   "node_source": "https://nodejs.org/dist/v24.21.0/",
+  "node_mirror": "https://cdn.npmmirror.com/binaries/node/v24.21.0/",
   "npm_source": "https://registry.npmjs.org/"
 }
