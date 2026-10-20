@@ -1,0 +1,14 @@
+{
+  "sha256": "657da8738eb1226eb6670efa7397969c7a69972dc9406c7735bd89e226b534c9",
+  "userscript_version": "0.10.0-local.29",
+  "manifest_entries_verified": 32,
+  "changed_from_v0.1.17": [
+    "app/szu-uooc.user.js",
+    "文件校验.sha256"
+  ],
+  "source_matches_package": true,
+  "excluded_preexisting_unrelated_changes": [
+    "student/install-windows.ps1",
+    "student/launch-windows.ps1"
+  ]
+}

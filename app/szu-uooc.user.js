@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.28
+// @version      0.10.0-local.29
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.28';
+  const SCRIPT_VERSION = '0.10.0-local.29';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -4221,7 +4221,18 @@
           if (questions.some((live, i) => live.question !== answeredQuestions[i].question || live.container !== answeredQuestions[i].container)) { await sleep(500); continue; }
           const doc = questions[0].container.ownerDocument;
           const cancel = doc.querySelector('#commitConfirmDialog [ng-click="vm.cancelCommitTask()"],#commitConfirmDialog [data-action=cancel],#commitConfirmDialog .layui-layer-btn1');
-          if (cancel) cancel.click();
+          if (cancel?.getClientRects().length) {
+            // layer.closeAll hides the reused dialog after its closing animation finishes.
+            cancel.click();
+            const closed = await waitForCondition(() => !cancel.isConnected || !cancel.getClientRects().length, {
+              timeout: 5000, interval: 50, isCancelled: () => !c.active || c.runId !== runId,
+            });
+            if (!c.active || c.runId !== runId) return;
+            if (!closed) throw new Error('旧验证弹窗尚未关闭，请关闭弹窗后点击继续');
+            if (!await refreshBinding()) return;
+            if (vmScope.vcode_params?.captchaVerifyParam) { retryAt = 0; continue; }
+            if (questions.some((live, i) => live.question !== answeredQuestions[i].question || live.container !== answeredQuestions[i].container)) { await sleep(500); continue; }
+          }
           if (!c.active || c.runId !== runId) return;
           c.recoveryCounts['verification:' + task.id] = (c.recoveryCounts['verification:' + task.id] || 0) + 1;
           persistCourseState(true);

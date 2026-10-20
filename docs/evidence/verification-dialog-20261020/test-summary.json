@@ -1,0 +1,8 @@
+{
+  "related_regression_passed": 58,
+  "related_unresolved_failures": 0,
+  "initial_runner_module_failure": "course-option-mapping required explicit NODE_PATH; rerun passed all 14 tests",
+  "packaged_app_regression_passed": 4,
+  "mac_clean_install": "passed",
+  "windows_original_machine": "not tested"
+}

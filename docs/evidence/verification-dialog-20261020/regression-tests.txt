@@ -1,0 +1,90 @@
+Browser bridge self-check passed: private Key, streaming transport, origin/frame/course guards. All requests mocked.
+✔ tests/browser-bridge.test.mjs (9937.828208ms)
+真实控制器 IPC：视频暂停、继续、停止保留 Chrome、连接期间失去父控制台不会启动任务。课程全部模拟，无解题 API 请求。
+✔ real controller IPC pauses playback, resumes, stops cleanly and cannot start after parent disconnects during connection (8568.930041ms)
+✔ free mode fills missing choice answers without a Key, reuses them on verification retry and never caches random answers (14026.25575ms)
+✔ free mode keeps known answers and leaves missing fill answers for a human (9597.589792ms)
+✔ free mode maps 11 random 0.1 to native option ids without an empty answer (5815.792667ms)
+✔ free mode maps 11 random 0.99 to native option ids without an empty answer (5414.924625ms)
+✔ free mode maps 20 random 0.1 to native option ids without an empty answer (5633.259458ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (7621.6955ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (17820.653416ms)
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (13757.5075ms)
+✔ verification retry waits for delayed native close before reusing the same dialog (13955.81225ms)
+✔ pause during native dialog closing cancels its scheduled reopen (6064.860208ms)
+✔ stop during native dialog closing cancels its scheduled reopen (5898.080583ms)
+✔ a native dialog that never closes pauses after the bounded wait without reopening (9631.373083ms)
+✔ repeated verification failures wait the full backoff and pause after three reopen attempts (12693.717791ms)
+✔ human verification during a pending retry submits once without reopening (5607.451208ms)
+✔ verification retry restores answers after the same quiz iframe and its answer model are replaced (9689.683084ms)
+✔ human verification during retry answer synchronization keeps its new scope result (5770.099ms)
+✔ pause cancels a scheduled verification retry (5176.192459ms)
+✔ stop cancels a scheduled verification retry (5214.876167ms)
+✔ changed questions cannot reopen verification using an earlier answer (5800.600916ms)
+✔ a transient native click error keeps the controller connected and retries after five seconds (11874.765708ms)
+✔ a delayed click from an older verification attempt cannot click a reopened widget (8670.926875ms)
+✔ the same quiz iframe can be replaced while waiting for AI and receives its answers without another request (5586.096042ms)
+✔ replacing a quiz with different question text while AI is pending cannot apply or submit the earlier answer (3493.047791ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (8683.609333ms)
+✔ a human verification callback that replaces the page model continues the same task without restart (7313.317875ms)
+✔ a native verification callback can retain the course source id instead of the exam id (5426.065209ms)
+✔ a fast human submit waits for delayed platform completion after verification state is cleared (13541.676625ms)
+✔ a fast human submit after quiz iframe replacement waits for platform completion without reopening (15730.888584ms)
+✔ explicitly cancelling native verification still pauses without submitting (7477.477417ms)
+✔ briefly hidden native verification can return after the dialog has been open for three seconds (13523.202333ms)
+✔ a verification callback from another task cannot submit the current quiz (5488.895125ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (3453.858625ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (3533.946583ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (7606.021708ms)
+✔ a second copy of the course script cannot overwrite a live runner with idle state (6095.164459ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (3696.133ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (5834.125042ms)
+✔ an original course tab can finish its login redirect before the controller validates its URL (3918.520125ms)
+✔ three videos naturally end in sequence and the following chapter quiz completes without external clicks (9667.92325ms)
+✔ persistent native verification click errors exhaust three attempts and safely wait for a human (21835.722667ms)
+选择题验收：序号映射、原文兼容、单选多选与填空混合、乱序字母及缓存；无效序号和歧义答案保留暂停保护，均不追加付费请求。
+图片验收：题干与图片选项实际发送、标签对应、原生答案键映射、读图失败和缺少识图模型时停止。全部使用自带测试图及模拟 AI。
+填空验收：题库、模拟 AI 和缓存保留多空顺序、重复答案及代码空白；保存值失真、题库冲突、空数不符和空答案均阻止提交。无真实平台或付费请求。
+✔ tests/course-controller.test.cjs (75202.536792ms)
+node:internal/modules/cjs/loader:1520
+  throw err;
+  ^
+
+Error: Cannot find module 'playwright'
+Require stack:
+- [LOCAL_USER]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1517:15)
+    at wrapResolveFilename (node:internal/modules/cjs/loader:1071:27)
+    at defaultResolveImplForCJSLoading (node:internal/modules/cjs/loader:1095:10)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1122:12)
+    at Module._load (node:internal/modules/cjs/loader:1294:5)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.require (node:internal/modules/cjs/loader:1617:12)
+    at require (node:internal/modules/helpers:153:16)
+    at Object.<anonymous> ([LOCAL_USER]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:4:22)
+    at Module._compile (node:internal/modules/cjs/loader:1872:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    '[LOCAL_USER]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs'
+  ]
+}
+
+Node.js v24.19.0
+✖ tests/course-option-mapping.test.cjs (33.072083ms)
+课程恢复：网络断开/无响应与导航超时自动恢复，持续503有限退避，401安全暂停，媒体重载→原生重开→耗尽暂停，恢复预算跨刷新，播放断点不冒充完成，停止后迟到响应不污染新任务。无真实平台或付费请求。
+✔ tests/course-recovery.test.cjs (20348.749833ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 44
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 348267.910875
+
+✖ failing tests:
+
+test at tests/course-option-mapping.test.cjs:1:1
+✖ tests/course-option-mapping.test.cjs (33.072083ms)
+  'test failed'

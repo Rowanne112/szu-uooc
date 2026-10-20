@@ -1,0 +1,31 @@
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (14209.335917ms)
+✖ verification retry waits for delayed native close before reusing the same dialog (13547.242166ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 29783.956792
+
+✖ failing tests:
+
+test at tests/controller-verification.test.mjs:172:1
+✖ verification retry waits for delayed native close before reusing the same dialog (13547.242166ms)
+  AssertionError [ERR_ASSERTION]: 验证弹窗已关闭，点击继续重新打开
+  + actual - expected
+
+  + 'paused'
+  - 'complete'
+
+      at TestContext.<anonymous> (file://[LOCAL_USER]/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/controller-verification.test.mjs:175:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'paused',
+    expected: 'complete',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

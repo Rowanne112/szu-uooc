@@ -1,0 +1,48 @@
+深易刷 v0.1.18：验证重试弹窗误关闭修复
+日期：2026-10-20（北京时间）；脚本版本：0.10.0-local.29。
+
+诊断记录
+- 反馈来自 Windows x64 / Edge，旧脚本 0.10.0-local.28，免费答题模式。
+- 21:07:25：网站显示验证失败，程序安排 5 秒后重试。
+- 21:07:29：重开原生验证弹窗。
+- 21:07:34：点击控件时报 element is not visible / scrollIntoViewIfNeeded timeout。
+- 21:07:36：误报“验证弹窗已关闭，点击继续重新打开”，课程暂停。
+- 21:09：手动继续后测验提交成功并进入后续视频。
+- 21:12 的最后一次停止是用户主动暂停，与上述异常分开。
+本记录不包含课程名称、网址、账号、题目答案或密钥。
+
+原因与证据
+网站的 cancelCommitTask 调用 layer.closeAll，commitTask 使用同一个 #commitConfirmDialog 作为弹窗内容。旧程序取消后同步重开，没有等待旧弹窗关闭结束。Layer 的关闭动画结束后会恢复并隐藏原内容，导致刚重开的控件消失。
+
+UOOC 原生代码（2026-10-20 再读取，SHA-256 与先前保存的源码一致）：
+https://assets.uooconline.com/index/js/paper/student_do_paper-57e6f067a5.js?v=1.0.0.9899
+SHA-256：5645af1c743811eb6f711be0cc0302772c2d5a18c5c123c07f51b74544e1aa98
+Layer 公开源码的 layer.close 在退出动画开启时延迟 200 毫秒清理对象内容：
+https://github.com/layui/layer/blob/master/src/layer.js
+
+复现与修复
+模拟网站复用同一弹窗、取消后延迟 200 毫秒关闭：修复前两次复现“验证弹窗已关闭”，实际状态 paused，而预期 complete。立即关闭的对照场景通过。修复后原场景通过，测验只提交一次，后续视频自动完成。
+
+程序现在等待原生弹窗确实关闭，最多等待 5 秒，再重新读取并校验当前课程、任务和完整题目后重开。复用本次答案；关闭期间暂停/停止会撤销重开；关闭超时安全暂停；不改变验证结果、不增加付费请求、不清空进度或费用记录。
+
+源码复现命令（在本地源码项目目录执行）：
+node --test --test-name-pattern='verification retry waits for delayed native close' tests/controller-verification.test.mjs
+
+验证记录
+最终结果：58 项相关回归通过，0 项未解决失败；包内 4 项回归通过；Mac 全新安装通过。首轮选项测试的模块路径问题已修正并完成重跑。
+- regression-before.txt：改动前复现及正常对照的原始输出。
+- regression-after-first.txt：仅修改关闭顺序后，故障场景与对照两项通过。
+- package-regression-tests.txt：从实际 ZIP 解出的程序，四项回归全部通过。覆盖延迟关闭、关闭期间暂停/停止、关闭动作无响应。
+- regression-tests.txt：相关课程控制、恢复、选项映射、浏览器桥接与控制器回归。
+- package-verification.json：32 项包内 SHA-256 通过，脚本与本地修复一致。与 v0.1.17 比较，只有 app/szu-uooc.user.js 和文件校验.sha256 变化。保留既有安装流程。
+- install-tests.txt：Mac 新目录安装通过：下载失败可重试、实际备用源下载、首次启动自动安装组件、配置权限与保留、重复启动和退出清理。
+- option-mapping-tests.txt：选项映射测试的依赖环境修正后重跑。首轮该文件因本地未设置 Playwright 模块路径而未能加载；补充 NODE_PATH 和测试 Chromium 路径重跑，不修改产品代码。
+上述发布证据位于 docs/evidence/verification-dialog-20261020/。
+
+更新与验收
+1. 在旧控制台点“设置 → 退出程序”，完整解压新版 ZIP 到新文件夹。
+2. 启动新版，连接原来的 Chrome / Edge，在原课程点“继续”或“开始”。
+3. 确认当前测验完成后继续后续视频；导出诊断时脚本版本应为 0.10.0-local.29。
+
+限制
+原 Windows 电脑的实际页面状态未随诊断包导出，本轮以原生弹窗生命周期复现并验证。未在原 Windows 机器实测，未使用真实课程或付费解题服务。网站追加人工验证时仍需人工接管。
