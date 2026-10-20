@@ -1,0 +1,21 @@
+{
+  "baseline_release": "v0.1.15",
+  "runtime_files_changed": [
+    "student/console.html",
+    "student/console.css",
+    "student/console.js",
+    "student/user-guidance.mjs"
+  ],
+  "changed_package_files": [
+    "app/student/console.css",
+    "app/student/console.html",
+    "app/student/console.js",
+    "app/student/user-guidance.mjs",
+    "文件校验.sha256"
+  ],
+  "package_files": 33,
+  "file_checksums_verified": 32,
+  "bytes": 228301,
+  "sha256": "3d3687de71313f893d928b35df217e8aaf292c788c9c35dc50df0f961f3a6a9b",
+  "other_runtime_files_unchanged": true
+}

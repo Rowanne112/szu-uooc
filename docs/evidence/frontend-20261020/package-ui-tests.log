@@ -1,0 +1,24 @@
+✔ concise recovery actions distinguish billing and model errors from invalid keys (0.84925ms)
+✔ the console keeps essential costs visible and every dialog action reachable at desktop, tablet and phone sizes (8155.507583ms)
+✔ manual recovery guidance preserves checkpoints and identifies exhausted retries (0.418042ms)
+✔ a temporary checkpoint write failure does not poison subsequent saves (31.443125ms)
+✔ recovery reasons survive console restart with credentials removed and bounded history (42.050792ms)
+真实控制器 + 模拟网站验收通过：新手引导、读取两课、隐藏 Key、一次一门整课、第二门拦截、暂停继续与停止换课、复用原浏览器和已有课程页、页面挂起仍可停止、视频页自动切下一节并目录确认整课完成、完成后启动下一课、去重、手机无溢出及无 JS 错误。无真实平台写入及付费请求。
+✔ tests/console-ui.test.mjs (28509.153833ms)
+✔ beginner input accepts only course learning URLs, not lookalike or credential URLs (0.521208ms)
+✔ configuration validates key, budget, Responses model and three prices before saving (0.277125ms)
+✔ course URL and private paths are separate arguments, with no Key in child arguments (0.282958ms)
+✔ a second launcher is blocked and normal exit releases the lock (3.248083ms)
+✔ Windows permission denial recovers only when the old PID belongs to another program (2.3225ms)
+✔ the real launcher retains its local origin across a clean termination and restart (448.464792ms)
+✔ the reported ambiguous AI answer preserves progress and gives quiz recovery steps in course help and logs (1601.002ms)
+✔ a paused course tells beginners where to act and keeps technical diagnostics out of its page (1515.621208ms)
+✔ settings, browser, costs, quizzes, check-in and unfamiliar failures all give persistent next steps (2828.532042ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43545.53425

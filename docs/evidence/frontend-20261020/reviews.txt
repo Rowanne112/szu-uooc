@@ -1,0 +1,3 @@
+Standards: 0 documented-rule violations, 0 material smells. Supplemental cost formatter reviewed: no new issue.
+Spec: 1 P2 estimated reservation display omission; fixed in 0a7b259 and independently confirmed resolved. Remaining: 0.
+Finish: four initial findings fixed together; one narrowly confirmed cross-open cost state omission fixed with reopen assertions. Final disposition by primary agent: ship within this UI scope. No third aesthetic search or second detector run.

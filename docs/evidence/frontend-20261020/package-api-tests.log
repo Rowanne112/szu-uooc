@@ -1,0 +1,49 @@
+✔ tests/api-auth-recovery.test.mjs (42.665292ms)
+✔ tests/api-images.test.mjs (40.25825ms)
+✔ switching models preserves legacy entries and records the new model and prices per request (19.076917ms)
+✔ switching models still counts old known costs and reservations against the same course budget (1.984333ms)
+✔ switching models cannot bypass an unresolved HTTP 502 charge (1.87375ms)
+✔ tests/api-protocol.test.mjs (26.981083ms)
+✔ a managed rate-limited task waits and recovers within budget while retaining the unknown reservation (17.1035ms)
+✔ persistent managed rate limits stop after three attempts without erasing reservations (6.946542ms)
+✔ cancelling after a rate-limited attempt sends nothing else and cannot claim the call was never sent (1.759541ms)
+✔ quota errors and long Retry-After responses cannot create an automatic retry loop (3.259375ms)
+✔ a retry rechecks the remaining budget before sending another request (3.440792ms)
+✔ Retry-After is respected and cancellation during that wait prevents another paid request (1004.066208ms)
+✔ a managed HTTP 200 stream timeout recovers without pausing or erasing its unknown charge (7.610583ms)
+✔ persistent stream interruptions exhaust two retries and do not grant another recovery cycle (8.405542ms)
+✔ pausing during stream recovery backoff prevents another paid dispatch (2.088208ms)
+✔ stream recovery rechecks its budget and never retries malformed or unmetered responses (3.559708ms)
+✔ unmanaged stream timeouts stay blocked while a live managed network interruption can recover (2.958708ms)
+✔ an earlier rate limit does not skip the first ten-second stream recovery delay (2.191625ms)
+API transport self-check passed: pricing, usage/cache, budget, model, credential isolation, SSE, unknown charge, concurrency. No network requests.
+✔ tests/api-request.test.mjs (107.725458ms)
+✔ explicit resume retains the complete old 502 reservation and records its recovery on the new request (13.365ms)
+✔ a new 502 cannot be retried until a new explicit resume and cannot trigger the managed retry loop (3.223584ms)
+✔ an old HTTP 200 without usage can be explicitly resumed without erasing or zeroing its reserved charge (1.959625ms)
+✔ explicit resume cannot bypass the shared budget, invalid amounts, metering overflow, pending requests or other unknown failures (3.46375ms)
+✔ real fetch SSE deadlines recover with reservations and normalize only the owned timeout AbortError (324.051334ms)
+✔ an unrelated abort after HTTP 200 remains unknown and cannot auto-retry (15.307125ms)
+✔ a real broken response stream recovers but a failure before headers remains blocked (18.399875ms)
+✔ rate limits use exponential waits and report exhaustion without losing reservations (3.132583ms)
+✔ HTTP-date Retry-After is respected and invalid or long waits require human recovery (8.973041ms)
+✔ a throwing recovery logger cannot change a paid request outcome (2.008292ms)
+✔ cancelling during ledger mkdir prevents dispatch and releases only the unsent reservation (1.026625ms)
+✔ cancelling during ledger readFile prevents dispatch and releases only the unsent reservation (0.884667ms)
+✔ cancelling during ledger rename prevents dispatch and releases only the unsent reservation (0.800625ms)
+✔ cancelling an unsent retry keeps the earlier paid attempt unknown and cannot claim the operation was never sent (1.434125ms)
+✔ official Ark models without a pricing extension pass detection and answer through the course API (18.234541ms)
+✔ Ark without /models tries bounded official candidates and skips unopened models without changing protocol (10.51975ms)
+✔ only the official Ark base inherits known prices and defaults to /api/v3 (0.183458ms)
+✔ Ark lists returning auth, billing or network errors never trigger paid fallback calls (3.787ms)
+✔ course errors retain Ark billing and usage-limit guidance and keep unknown cost reservations (2.974417ms)
+✔ tests/console-detection.test.mjs (102.458ms)
+✔ tests/service-detection.test.mjs (81.134833ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1176.188833

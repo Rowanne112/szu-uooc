@@ -1,0 +1,42 @@
+✔ a missing state channel recovers with a bounded reload and resumes the saved course (1385.868583ms)
+✔ a invalid state channel recovers with a bounded reload and resumes the saved course (1282.554208ms)
+✔ a persistent missing state channel exhausts a finite backoff budget and safely pauses (1834.380416ms)
+✔ user pause cancels recovery while the DOM state is unavailable and survives a reload (1524.394458ms)
+✔ a pending submission blocks automatic page replay and reports a manual pause (1361.553916ms)
+✔ a brief missing snapshot returns without a reload or manual pause (1368.138541ms)
+✔ a checkpoint with an unconfirmed submission blocks recovery even before the first readable snapshot (1182.463917ms)
+✔ a malformed checkpoint stops the managed document without restarting a runner (1264.550166ms)
+✔ fresh heartbeats do not create progress logs or duplicate state events (1396.925791ms)
+✔ a dead script heartbeat recovers but an active bounded retry retains ownership (1518.923625ms)
+✔ a duplicate controller for the same saved course is rejected before browser operations and releases the lock after stop (1398.786209ms)
+✔ a recovery navigation timeout can still observe a successfully restored script (1349.366791ms)
+✔ stop interrupts page recovery backoff and retains the original browser tab (1600.555833ms)
+✔ pause still stops the real runner when the stop button is removed (1164.690125ms)
+✔ losing both stop interfaces terminates the old document without discarding a pending submission and can resume manually (1250.672792ms)
+✔ stop destroys an uncontrolled active document when both ordinary stop interfaces are lost (1167.452583ms)
+✔ stop also terminates a runner whose stop API, button and DOM state have all disappeared (1182.797208ms)
+✔ a stop evaluate that never answers reaches its host deadline and terminates the old document (4324.717125ms)
+✔ task-level recovery reasons, attempts and results reach persistent console logging once per change (1695.829042ms)
+✔ emergency pause never overwrites a checkpoint acquired by another course tab (1252.972625ms)
+✔ a pause whose checkpoint write fails cannot restart after storage recovers and the user reloads (3431.804208ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (7572.358125ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (17802.555125ms)
+✔ repeated verification failures wait the full backoff and pause after three reopen attempts (12699.340959ms)
+✔ pause cancels a scheduled verification retry (4993.568584ms)
+✔ stop cancels a scheduled verification retry (4757.585583ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (8360.599792ms)
+✔ explicitly cancelling native verification still pauses without submitting (7277.150708ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (3292.165792ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (3433.159833ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (7320.807416ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (3378.472333ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (5656.034292ms)
+ℹ tests 33
+ℹ suites 0
+ℹ pass 33
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 124229.958125

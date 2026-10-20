@@ -1,6 +1,6 @@
 # 深易刷
 
-Windows / Mac 新手版。仓库名称为 `szu-uooc`，程序界面也可能显示这个名称。
+Windows / Mac 新手版。
 
 **[下载最新安装包 ShenYiShua.zip](https://github.com/zcx28/szu-uooc/releases/latest/download/ShenYiShua.zip)** · [查看本次更新](https://github.com/zcx28/szu-uooc/releases/latest)
 
@@ -13,6 +13,12 @@ Windows / Mac 新手版。仓库名称为 `szu-uooc`，程序界面也可能显�
 5. 使用 AI 解题的同学，再到「设置 → 解题服务」，确认网址和 Key，点「检测并保存」，检测通过后继续课程。
 
 **不用卸载浏览器，不要删除原来的设置或费用账本。** 更新时不要同时运行新旧两个程序。若切换浏览器时提示上次交卷未确认，请先按提示核对。
+
+## 0.1.16 控制台精简
+
+- 删除重复说明和冗长提示，课程操作集中在课程行；答题方式直接可选，模型、报价与签到规则按需展开。
+- 六个弹窗保留可见操作区，改善小屏换行、键盘焦点和浏览器禁用状态。检测上限、每课预算及待核对金额仍可直接查看。
+- 解包界面与启动 15 项、API 40 项、文件校验 32 项通过。继续包含下方方舟修复，详见 [界面验收](docs/FRONTEND_POLISH_VALIDATION.md)。
 
 ## 0.1.15 火山方舟 API 修复
 

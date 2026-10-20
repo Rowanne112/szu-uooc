@@ -1,0 +1,245 @@
+✔ tests/api-auth-recovery.test.mjs (44.601041ms)
+✔ tests/api-images.test.mjs (43.410125ms)
+✔ switching models preserves legacy entries and records the new model and prices per request (16.624125ms)
+✔ switching models still counts old known costs and reservations against the same course budget (1.655542ms)
+✔ switching models cannot bypass an unresolved HTTP 502 charge (1.316792ms)
+✔ tests/api-protocol.test.mjs (27.422333ms)
+✔ a managed rate-limited task waits and recovers within budget while retaining the unknown reservation (17.483334ms)
+✔ persistent managed rate limits stop after three attempts without erasing reservations (6.691667ms)
+✔ cancelling after a rate-limited attempt sends nothing else and cannot claim the call was never sent (2.346166ms)
+✔ quota errors and long Retry-After responses cannot create an automatic retry loop (2.563958ms)
+✔ a retry rechecks the remaining budget before sending another request (2.553ms)
+✔ Retry-After is respected and cancellation during that wait prevents another paid request (1002.648208ms)
+✔ a managed HTTP 200 stream timeout recovers without pausing or erasing its unknown charge (3.960125ms)
+✔ persistent stream interruptions exhaust two retries and do not grant another recovery cycle (3.707541ms)
+✔ pausing during stream recovery backoff prevents another paid dispatch (1.408333ms)
+✔ stream recovery rechecks its budget and never retries malformed or unmetered responses (3.885625ms)
+✔ unmanaged stream timeouts stay blocked while a live managed network interruption can recover (2.925125ms)
+✔ an earlier rate limit does not skip the first ten-second stream recovery delay (2.020667ms)
+API transport self-check passed: pricing, usage/cache, budget, model, credential isolation, SSE, unknown charge, concurrency. No network requests.
+✔ tests/api-request.test.mjs (106.292333ms)
+✔ explicit resume retains the complete old 502 reservation and records its recovery on the new request (18.141166ms)
+✔ a new 502 cannot be retried until a new explicit resume and cannot trigger the managed retry loop (3.619917ms)
+✔ an old HTTP 200 without usage can be explicitly resumed without erasing or zeroing its reserved charge (4.840333ms)
+✔ explicit resume cannot bypass the shared budget, invalid amounts, metering overflow, pending requests or other unknown failures (5.225666ms)
+✔ real fetch SSE deadlines recover with reservations and normalize only the owned timeout AbortError (340.892667ms)
+✔ an unrelated abort after HTTP 200 remains unknown and cannot auto-retry (17.39425ms)
+✔ a real broken response stream recovers but a failure before headers remains blocked (23.115541ms)
+✔ rate limits use exponential waits and report exhaustion without losing reservations (6.617542ms)
+✔ HTTP-date Retry-After is respected and invalid or long waits require human recovery (11.980542ms)
+✔ a throwing recovery logger cannot change a paid request outcome (4.586125ms)
+✔ cancelling during ledger mkdir prevents dispatch and releases only the unsent reservation (3.465417ms)
+✔ cancelling during ledger readFile prevents dispatch and releases only the unsent reservation (2.884667ms)
+✔ cancelling during ledger rename prevents dispatch and releases only the unsent reservation (2.792625ms)
+✔ cancelling an unsent retry keeps the earlier paid attempt unknown and cannot claim the operation was never sent (4.799ms)
+✔ official Ark models without a pricing extension pass detection and answer through the course API (27.497125ms)
+✔ Ark without /models tries bounded official candidates and skips unopened models without changing protocol (14.729083ms)
+✔ only the official Ark base inherits known prices and defaults to /api/v3 (0.234667ms)
+✔ Ark lists returning auth, billing or network errors never trigger paid fallback calls (3.67875ms)
+✔ course errors retain Ark billing and usage-limit guidance and keep unknown cost reservations (2.676292ms)
+✔ queued paid requests cannot survive a new run or a document reload with the same runId (3296.47375ms)
+✔ a delayed image is rejected after resuming the same task in a new run (1248.076792ms)
+Browser bridge self-check passed: private Key, streaming transport, origin/frame/course guards. All requests mocked.
+✔ tests/browser-bridge.test.mjs (8968.176208ms)
+✔ Edge discovery reads the selected browser profiles on Mac and Windows (5.777334ms)
+✔ discovery rejects unknown browser kinds and reports a missing Edge without using Chrome (0.338834ms)
+✔ the real browser selector changes a previously used offline Edge to Chrome after manual verification (2033.945875ms)
+✔ an unconnected browser selection can be changed back after restart without connecting it (46.749458ms)
+✔ a damaged signup configuration pauses signup without preventing the console from opening (5.19525ms)
+✔ reselection still checks submissions in a connected browser before course refresh (8.506584ms)
+✔ an offline previously used browser can be changed after explicit submission confirmation (12.905542ms)
+✔ removing the final course and restarting cannot bypass unresolved submission checks (12.766083ms)
+✔ browser selection waits for worker exit, preserves shared costs and survives restart (25.735792ms)
+✔ switching checks stored submissions from a closed course origin and preserves existing tabs (1403.317042ms)
+✔ browser switching refuses unresolved submissions and disconnect resets catalog and connection (0.325042ms)
+✔ a delayed disconnect from the previous Chrome connection cannot discard its replacement (0.094375ms)
+✔ debug setup refuses an unsupported Chrome internal URL launch instead of reporting success (0.417666ms)
+✔ course startup reuses the original browser and stops without closing its user tabs (7.463042ms)
+✔ actual Chrome command opens all URLs in the specified existing profile; signup pages stay inactive through navigation (2535.971791ms)
+✔ user can configure signup, add courses, switch schedule and reopen from the real console UI without a Key (2785.177ms)
+✔ macOS validates and actually launches the per-user job, then removes its startup file (70.958167ms)
+✔ Mac course focus uses the owned Chrome PID, rejects unsafe identifiers and reports activation failure (0.741792ms)
+✔ startup opens the entire selected list once, survives restarts and only supplements new targets (29.715166ms)
+✔ same-account browser changes keep daily checkin results and require a newly tested profile (3.248583ms)
+✔ legacy profile-based history preserves opened, uncertain and failed results when switching browsers (3.0515ms)
+✔ offline and partial command failures retry after five minutes without reopening accepted pages (2.497834ms)
+✔ scheduled mode waits for Beijing time, catches up after sleep, and does not reset a completed day (2.698917ms)
+✔ manual reopen is explicit; interrupted or corrupt records never silently repeat a day (2.586833ms)
+✔ setup requires script acknowledgement and a known Chrome profile, with no provider credentials (2.871917ms)
+✔ Chrome opens one batch with the chosen profile and literal URL arguments; errors affect only that batch (0.470417ms)
+✔ per-user startup files preserve spaces and quote characters, can be disabled, and do not keep restarting after exit (1.883458ms)
+✔ console saves course selection and serves protected signup settings without an API Key or controller (44.987667ms)
+✔ the original Chrome connector refuses remote or credential-bearing endpoints (0.508ms)
+✔ an early closed socket rejects without waiting for the connection timeout (6.203334ms)
+✔ original Chrome connects despite a frozen unrelated renderer and retains user tabs (2475.799166ms)
+✔ original Chrome connects despite a frozen blank tab and retains user tabs (1853.7165ms)
+✔ original Chrome connects despite a frozen blank tab before opening a course and retains user tabs (2013.257167ms)
+✔ clicking the console course link in connected Chrome opens the course instead of a frozen blank tab (1763.90675ms)
+✔ tests/console-detection.test.mjs (85.946541ms)
+✔ concise recovery actions distinguish billing and model errors from invalid keys (0.94725ms)
+✔ the console keeps essential costs visible and every dialog action reachable at desktop, tablet and phone sizes (8471.429375ms)
+✔ manual recovery guidance preserves checkpoints and identifies exhausted retries (0.460708ms)
+✔ a temporary checkpoint write failure does not poison subsequent saves (34.231667ms)
+✔ recovery reasons survive console restart with credentials removed and bounded history (55.212459ms)
+✔ upgrading a legacy AI configuration keeps its mode and connection test result (37.942416ms)
+✔ free mode can be saved and start a course without a Key or any provider request (36.842583ms)
+✔ console protects credentials, validates inputs, controls a course, runs one course at a time with confirmed completions and preserves costs (79.907ms)
+✔ dependency download failure is visible and retry repairs it; restart keeps progress without auto-running (15.06075ms)
+✔ restart reuses the previous local console origin so existing tabs can reconnect (3.746708ms)
+✔ an occupied saved console port falls back safely without taking over its listener (2.423333ms)
+真实控制器 + 模拟网站验收通过：新手引导、读取两课、隐藏 Key、一次一门整课、第二门拦截、暂停继续与停止换课、复用原浏览器和已有课程页、页面挂起仍可停止、视频页自动切下一节并目录确认整课完成、完成后启动下一课、去重、手机无溢出及无 JS 错误。无真实平台写入及付费请求。
+✔ tests/console-ui.test.mjs (29206.665875ms)
+真实控制器 IPC：视频暂停、继续、停止保留 Chrome、连接期间失去父控制台不会启动任务。课程全部模拟，无解题 API 请求。
+✔ real controller IPC pauses playback, resumes, stops cleanly and cannot start after parent disconnects during connection (6571.116417ms)
+✔ a missing state channel recovers with a bounded reload and resumes the saved course (1609.275834ms)
+✔ a invalid state channel recovers with a bounded reload and resumes the saved course (1964.377958ms)
+✔ a persistent missing state channel exhausts a finite backoff budget and safely pauses (2762.630584ms)
+✔ user pause cancels recovery while the DOM state is unavailable and survives a reload (2181.424917ms)
+✔ a pending submission blocks automatic page replay and reports a manual pause (2195.766708ms)
+✔ a brief missing snapshot returns without a reload or manual pause (1523.52725ms)
+✔ a transient observational hook failure is logged without terminating the active course (1279.102875ms)
+✔ a checkpoint with an unconfirmed submission blocks recovery even before the first readable snapshot (1295.089458ms)
+✔ a malformed checkpoint stops the managed document without restarting a runner (1458.640875ms)
+✔ fresh heartbeats do not create progress logs or duplicate state events (1681.737875ms)
+✔ a dead script heartbeat recovers but an active bounded retry retains ownership (1900.16375ms)
+✔ a duplicate controller for the same saved course is rejected before browser operations and releases the lock after stop (1756.385041ms)
+✔ an initial page load timeout keeps monitoring and starts when the DOM becomes usable (1352.967667ms)
+✔ a recovery navigation timeout can still observe a successfully restored script (1881.72475ms)
+✔ stop interrupts page recovery backoff and retains the original browser tab (2326.549625ms)
+✔ pause still stops the real runner when the stop button is removed (1269.066792ms)
+✔ losing both stop interfaces terminates the old document without discarding a pending submission and can resume manually (1393.703625ms)
+✔ stop destroys an uncontrolled active document when both ordinary stop interfaces are lost (1208.61225ms)
+✔ stop also terminates a runner whose stop API, button and DOM state have all disappeared (1637.611375ms)
+✔ a stop evaluate that never answers reaches its host deadline and terminates the old document (4577.240333ms)
+✔ task-level recovery reasons, attempts and results reach persistent console logging once per change (1979.772ms)
+✔ emergency pause never overwrites a checkpoint acquired by another course tab (1373.412166ms)
+✔ a pause whose checkpoint write fails cannot restart after storage recovers and the user reloads (3937.717584ms)
+ℹ Error: Test hook "after" at tests/controller-recovery.test.mjs:68:5 generated asynchronous activity after the test ended. This activity created the error "Error: disposableObject.dispose: disposable@e35e6d3dfb3f962f5ef92631b21c147e is disposed more than once" and would have caused the test to fail, but instead triggered an unhandledRejection event.
+✖ tests/controller-recovery.test.mjs (46402.241166ms)
+✔ free mode fills missing choice answers without a Key, reuses them on verification retry and never caches random answers (14093.59175ms)
+✔ free mode keeps known answers and leaves missing fill answers for a human (9456.427541ms)
+✔ free mode maps 11 random 0.1 to native option ids without an empty answer (5553.002ms)
+✔ free mode maps 11 random 0.99 to native option ids without an empty answer (5832.202708ms)
+✔ free mode maps 20 random 0.1 to native option ids without an empty answer (5695.37175ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (7595.450458ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (17556.654625ms)
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (13652.843708ms)
+✖ repeated verification failures wait the full backoff and pause after three reopen attempts (1695.997792ms)
+✔ human verification during a pending retry submits once without reopening (5569.98375ms)
+✔ verification retry restores answers after the same quiz iframe and its answer model are replaced (9768.351042ms)
+✔ human verification during retry answer synchronization keeps its new scope result (5946.505875ms)
+✔ pause cancels a scheduled verification retry (5274.410625ms)
+✔ stop cancels a scheduled verification retry (4821.41825ms)
+✔ changed questions cannot reopen verification using an earlier answer (5383.102166ms)
+✔ a transient native click error keeps the controller connected and retries after five seconds (11626.541417ms)
+✔ a delayed click from an older verification attempt cannot click a reopened widget (8818.190584ms)
+✔ the same quiz iframe can be replaced while waiting for AI and receives its answers without another request (5658.4515ms)
+✔ replacing a quiz with different question text while AI is pending cannot apply or submit the earlier answer (3468.120792ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (8401.630459ms)
+✔ a human verification callback that replaces the page model continues the same task without restart (7306.345083ms)
+✔ a native verification callback can retain the course source id instead of the exam id (5303.750833ms)
+✔ a fast human submit waits for delayed platform completion after verification state is cleared (13218.206416ms)
+✔ a fast human submit after quiz iframe replacement waits for platform completion without reopening (15328.953709ms)
+✔ explicitly cancelling native verification still pauses without submitting (7470.469625ms)
+✔ briefly hidden native verification can return after the dialog has been open for three seconds (13282.715917ms)
+✔ a verification callback from another task cannot submit the current quiz (5315.087583ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (3282.975791ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (3440.543667ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (7363.103458ms)
+✔ a second copy of the course script cannot overwrite a live runner with idle state (5780.463375ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (3194.782625ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (5622.650375ms)
+✔ an original course tab can finish its login redirect before the controller validates its URL (3529.368792ms)
+✔ three videos naturally end in sequence and the following chapter quiz completes without external clicks (9405.118291ms)
+✔ persistent native verification click errors exhaust three attempts and safely wait for a human (21531.7345ms)
+✔ only one whole course runs at a time; a paused course must be stopped before switching (60.334458ms)
+✔ failed start can be retried for the same course (13.857958ms)
+选择题验收：序号映射、原文兼容、单选多选与填空混合、乱序字母及缓存；无效序号和歧义答案保留暂停保护，均不追加付费请求。
+图片验收：题干与图片选项实际发送、标签对应、原生答案键映射、读图失败和缺少识图模型时停止。全部使用自带测试图及模拟 AI。
+填空验收：题库、模拟 AI 和缓存保留多空顺序、重复答案及代码空白；保存值失真、题库冲突、空数不符和空答案均阻止提交。无真实平台或付费请求。
+✔ tests/course-controller.test.cjs (61642.438458ms)
+原生 MP4 真实播放验收：两段视频自然 ended 并目录确认、停滞切换当前任务的签名线路、无线路时暂停而不假完成、视频内单选/多选原生确认后续播、错误题目/缺少答案不提交。无真实平台或付费请求。
+✔ tests/course-media.test.cjs (23530.307417ms)
+课程恢复：网络断开/无响应与导航超时自动恢复，持续503有限退避，401安全暂停，媒体重载→原生重开→耗尽暂停，恢复预算跨刷新，播放断点不冒充完成，停止后迟到响应不污染新任务。无真实平台或付费请求。
+✔ tests/course-recovery.test.cjs (15248.80725ms)
+✔ allowlisted diagnostics remove credentials, course identity and content, handle absent/corrupt evidence and create a real ZIP (47.588625ms)
+✔ authenticated ZIP download works during learning and UI failures remain retryable (2064.025958ms)
+✔ Mac downloads use system HTTPS proxy with no inherited proxy variables (1234.704959ms)
+✔ disabled or malformed system proxies do not become download proxies (3495.703208ms)
+✔ explicit HTTPS or ALL proxy configuration keeps priority (21.089875ms)
+✔ loopback bypass preserves user exclusions and stays stable when sourced twice (291.85475ms)
+✔ tests/service-detection.test.mjs (65.660083ms)
+✔ download failure keeps the technical cause in a local file and tells the user how to start again (383.002458ms)
+✔ Mac installer recovers from the reported DNS timeout using a verified mirror download (837.85575ms)
+✔ an incomplete package gives extraction steps instead of a Node stack trace (2028.933083ms)
+✔ beginner input accepts only course learning URLs, not lookalike or credential URLs (0.660791ms)
+✔ configuration validates key, budget, Responses model and three prices before saving (0.367042ms)
+✔ course URL and private paths are separate arguments, with no Key in child arguments (0.48625ms)
+✔ a second launcher is blocked and normal exit releases the lock (4.898042ms)
+✔ Windows permission denial recovers only when the old PID belongs to another program (2.709084ms)
+✖ the real launcher retains its local origin across a clean termination and restart (317.042208ms)
+✔ the reported ambiguous AI answer preserves progress and gives quiz recovery steps in course help and logs (1790.96675ms)
+✔ a paused course tells beginners where to act and keeps technical diagnostics out of its page (1486.126209ms)
+✖ settings, browser, costs, quizzes, check-in and unfamiliar failures all give persistent next steps (1421.514458ms)
+﹣ Windows installer supports Chinese, spaces and square brackets through download, components and restart (0.937125ms) # SKIP
+﹣ Windows checksum failure explains its stage and preserves a complete local error (0.047417ms) # SKIP
+﹣ Windows extraction failure reports the actual cause and releases the installer lock (0.037708ms) # SKIP
+﹣ Windows launcher finds and removes its ready file in a bracketed installation path (0.040583ms) # SKIP
+ℹ tests 177
+ℹ suites 0
+ℹ pass 169
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 336192.493125
+
+✖ failing tests:
+
+test at tests/controller-recovery.test.mjs:1:1
+✖ tests/controller-recovery.test.mjs (46402.241166ms)
+  'test failed'
+
+test at tests/controller-verification.test.mjs:169:1
+✖ repeated verification failures wait the full backoff and pause after three reopen attempts (1695.997792ms)
+  page.evaluate: Execution context was destroyed, most likely because of a navigation
+      at error (<workspace>/szu-uooc/tests/controller-verification.test.mjs:171:24)
+      at <workspace>/szu-uooc/tests/controller-verification.test.mjs:172:43
+      at waitFor (<workspace>/szu-uooc/tests/controller-verification.test.mjs:15:98)
+      at async TestContext.<anonymous> (<workspace>/szu-uooc/tests/controller-verification.test.mjs:172:3) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/student-start.test.mjs:64:1
+✖ the real launcher retains its local origin across a clean termination and restart (317.042208ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /旧版.*设置.*退出程序.*新版/. Input:
+
+  '请先在旧控制台「设置 → 退出程序」，再启动新版。不要删除设置或费用记录。\n'
+
+      at TestContext.<anonymous> (file:///Users/zhouxianliang/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/student-start.test.mjs:82:10)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '请先在旧控制台「设置 → 退出程序」，再启动新版。不要删除设置或费用记录。\n',
+    expected: /旧版.*设置.*退出程序.*新版/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/user-guidance-ui.test.mjs:68:1
+✖ settings, browser, costs, quizzes, check-in and unfamiliar failures all give persistent next steps (1421.514458ms)
+  AssertionError [ERR_ASSERTION]: 连接已中断，请检查 Edge 登录、调试开关和授权后重试。
+      at TestContext.<anonymous> (file:///Users/zhouxianliang/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/user-guidance-ui.test.mjs:104:208)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: '请在「设置」重新连接 Edge，按指引开启调试并允许连接。',
+    expected: /复制调试页地址.*Edge.*允许/,
+    operator: 'match',
+    diff: 'simple'
+  }
