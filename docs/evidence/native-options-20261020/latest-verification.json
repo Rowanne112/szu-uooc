@@ -1,0 +1,13 @@
+{
+  "checked_at": "2026-10-20T12:42:17.624848+00:00",
+  "release_url": "https://github.com/zcx28/szu-uooc/releases/tag/v0.1.17",
+  "tag": "v0.1.17",
+  "target_commit": "312080c18870aa855bd4dd80b4668ed2e90b0824",
+  "public_latest_zip_url": "https://github.com/zcx28/szu-uooc/releases/latest/download/ShenYiShua.zip",
+  "sha256": "0a9129007be3312c70fce14443e47e795b90e620ec68ca5de4492a6a9de6e72f",
+  "github_asset_digest_matches": true,
+  "download_matches_candidate": true,
+  "userscript_version": "0.10.0-local.28",
+  "verified_manifest_entries": 32,
+  "tag_matches_commit": true
+}
