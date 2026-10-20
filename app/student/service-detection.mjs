@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { randomInt } from 'node:crypto';
 import { createAPI } from '../api-request.mjs';
-import { candidateModels, normalizeServiceURL, serviceFingerprint, endpointFor, parseAnswerJSON, serviceProblem } from '../api-protocol.mjs';
+import { candidateModels, normalizeServiceURL, serviceFingerprint, endpointFor, parseAnswerJSON, serviceProblem, arkModelList } from '../api-protocol.mjs';
 import { readJSON, saveJSON } from './settings.mjs';
 
 // Three red squares on white; no course material is used for connection tests.
@@ -21,8 +21,13 @@ export async function detectService({ base_url, api_key, model = '', dataDir, fe
   catch { throw new Error('无法连接解题服务，请检查 API 网址和网络后重新检测。'); }
   const raw = await response.text();
   if (raw.length > 2 * 1024 * 1024) throw new Error('服务商返回的模型列表过大，请修改服务后重新检测。');
-  let data; try { data = JSON.parse(raw); } catch { throw new Error(response.ok ? 'API 网址返回的不是模型列表，请复制服务商提供的 API 网址。' : serviceProblem(response.status, {})); }
-  if (!response.ok) throw new Error(serviceProblem(response.status, data));
+  const ark = arkModelList(base);
+  let data;
+  if (ark && [404, 405].includes(response.status)) data = { data: ark };
+  else {
+    try { data = JSON.parse(raw); } catch { throw new Error(response.ok ? 'API 网址返回的不是模型列表，请复制服务商提供的 API 网址。' : serviceProblem(response.status, {})); }
+    if (!response.ok) throw new Error(serviceProblem(response.status, data));
+  }
   if (!Array.isArray(data.data) || data.data.length > 10000) throw new Error('服务商没有返回可识别的模型列表，请修改服务后重新检测。');
   const models = candidateModels(base, data.data.filter(item => typeof item?.id === 'string' && !item.id.includes(api_key)));
   const preferred = model ? models.find(m => m.id === model) : null;
@@ -50,19 +55,19 @@ export async function detectService({ base_url, api_key, model = '', dataDir, fe
     try {
       try { await probe(candidate, false); }
       catch (error) {
-        if (!/HTTP (?:404|405)/.test(error.message) || calls >= 6) throw error;
+        if (ark || !/HTTP (?:404|405)/.test(error.message) || calls >= 6) throw error;
         candidate.wire_api = candidate.wire_api === 'chat' ? 'responses' : 'chat';
         await probe(candidate, false);
       }
       candidate.verified_text = true; candidate.status = 'text'; candidate.reason = '已验证文字调用与答案格式';
       if (candidate.vision && candidate.image_tokens > 0 && calls < 6) {
         try { await probe(candidate, true); candidate.verified_image = true; candidate.status = 'text_image'; candidate.reason = '文字与自带测试图片均通过；仅验证连通性及格式'; }
-        catch (error) { candidate.reason += '；' + safeReason(error); if (/HTTP (?:401|403|402)|余额|额度|上次请求|预留上限/.test(error.message) || /费用未知/.test(error.message) && !/HTTP (?:400|404|405)/.test(error.message)) fatal = candidate.reason; }
+        catch (error) { candidate.reason += '；' + safeReason(error); if (!error.modelUnavailable && (/HTTP (?:401|403|402)|余额|额度|上次请求|预留上限/.test(error.message) || /费用未知/.test(error.message) && !/HTTP (?:400|404|405)/.test(error.message))) fatal = candidate.reason; }
       }
       if (candidate.verified_image && (!model || candidate === preferred)) break;
     } catch (error) {
       candidate.status = 'failed'; candidate.reason = safeReason(error);
-      if (/401|403|余额|额度|上次请求|预留上限/.test(error.message)) fatal = candidate.reason;
+      if (!error.modelUnavailable && /401|403|余额|额度|上次请求|预留上限/.test(error.message)) fatal = candidate.reason;
     }
   }
   const verified = models.filter(m => m.verified_text);
@@ -73,7 +78,7 @@ export async function detectService({ base_url, api_key, model = '', dataDir, fe
   const result = { base_url: base, fingerprint, models, model: primary?.id || '', profile: primary || null, image_profile: image || null,
     status: primary ? 'ready' : 'blocked', checked_at: new Date().toISOString(), testCosts,
     message: primary ? image ? '已验证文字和图片调用及答案格式；这不是答题准确率测试。' : '文字调用已验证；当前没有可用识图模型，遇到图片题将暂停，请手动完成或修改服务。' : fatal || models.find(m => m.status === 'failed')?.reason || '已读取模型列表，但价格无法核实，无法安全执行付费检测和预算保护。请修改服务；无需填写价格或模型名称。',
-    reason: primary ? `${primary.id} 已通过实际文字测试${primary.verified_image ? '和图片测试' : ''}；优先选择已核价的较低报价候选，费用按上限预估。` : '' };
+    reason: primary ? `${primary.id} 已通过实际文字测试${primary.verified_image ? '和图片测试' : ''}；优先选择已核价的较低报价候选，费用按上限预估。${primary.price_source === 'https://www.volcengine.com/docs/82379/1544106' ? '方舟人民币报价取长上下文上限，按 1 美元 = 6 元人民币保守折算；实际扣费以方舟账单为准。' : ''}` : '' };
   await saveJSON(cacheFile, { fingerprint, selection: primary?.id || model, at: Date.now(), result });
   return result;
 }

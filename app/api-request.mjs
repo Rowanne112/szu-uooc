@@ -203,7 +203,8 @@ export function createAPI(config, ledgerDir, fetchImpl = fetch, onRecovery = () 
       const status = entry.http_status ? `HTTP ${entry.http_status}；` : '';
       const reason = entry.provider_error ? `${entry.provider_error.reason}；` : '';
       const failure = new Error(entry.status === 'known' ? `API ${status}${reason}未返回可用答案；已记录 usage，课程暂停` : `API ${status}${reason}结果或费用未知；保留预留额度，课程暂停，${[200, 502].includes(entry.http_status) ? '可点击继续在剩余预算内重试' : '禁止自动重试'}`);
-      if ([401, 403].includes(entry.http_status)) failure.message = `解题服务 HTTP ${entry.http_status}：Key 无效或没有调用权限。请重新复制完整 Key，点击「检测并保存」后继续；原请求的费用记录保留。`;
+      failure.modelUnavailable = [403, 404].includes(entry.http_status) && ['ModelNotOpen', 'InvalidEndpointOrModel.NotFound', 'OperationDenied.ServiceNotOpen'].includes(entry.provider_error?.code);
+      if ([401, 403].includes(entry.http_status)) failure.message = `解题服务 HTTP ${entry.http_status}：${serviceProblem(entry.http_status, { error: entry.provider_error })}原请求的费用记录保留。`;
       else if (entry.http_status && entry.http_status !== 200 && entry.http_status !== 502) failure.message = `${serviceProblem(entry.http_status, { error: entry.provider_error })}（HTTP ${entry.http_status}；${entry.status === 'known' ? '已记录用量与费用' : '费用未知，预留保留'}）`;
       if (entry.http_status === 429 && ['请求频率限制', '并发限制'].includes(entry.provider_error?.reason)
         && !entry.retry_after_invalid && (entry.retry_after_seconds === undefined || entry.retry_after_seconds <= 60)) failure.retryAfterMs = (entry.retry_after_seconds ?? 15) * 1000;

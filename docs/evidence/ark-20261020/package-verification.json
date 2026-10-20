@@ -1,0 +1,14 @@
+{
+  "baseline_release": "v0.1.14",
+  "source_commit": "db5f38979c85b12c42cbfb615ef5753029d2de9a",
+  "runtime_files_changed": [
+    "app/api-protocol.mjs",
+    "app/api-request.mjs",
+    "app/student/service-detection.mjs"
+  ],
+  "package_files": 33,
+  "file_checksums_verified": 32,
+  "bytes": 228903,
+  "sha256": "783146a00448b1eabca098ecf32a90dcc2ca7cb28095015d593e2ee9f9b088fd",
+  "other_runtime_files_unchanged": true
+}

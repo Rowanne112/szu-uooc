@@ -1,8 +1,22 @@
 import { createHash } from 'node:crypto';
 
-export const capabilityVersion = '2026-10-17.1';
+export const capabilityVersion = '2026-10-20.1';
 const openaiSource = 'https://developers.openai.com/api/docs/pricing';
 const deepseekSource = 'https://api-docs.deepseek.com/quick_start/pricing/';
+const arkSource = 'https://www.volcengine.com/docs/82379/1544106';
+const arkBase = 'https://ark.cn-beijing.volces.com/api/v3';
+// shortcut: CNY ceilings use 6 CNY/USD (2026-10-20 reference: 6.7200); recheck if FX falls below 6 or prices change.
+const arkKnown = Object.fromEntries(Object.entries({
+  'doubao-seed-2-1-lite-260915': [.8, .16, 2.7],
+  'doubao-seed-2-1-pro-260915': [6, 1.2, 30],
+  'doubao-seed-2-1-pro-260628': [6, 1.2, 30],
+  'doubao-seed-2-1-turbo-260628': [3, .6, 15],
+  'doubao-seed-2-0-mini-260428': [.8, .16, 8],
+  'doubao-seed-2-0-mini-260215': [.8, .16, 8],
+  'doubao-seed-2-0-lite-260428': [1.8, .36, 10.8],
+  'doubao-seed-2-0-lite-260215': [1.8, .36, 10.8],
+  'doubao-seed-2-0-pro-260215': [9.6, 1.92, 48],
+}).map(([id, rates]) => [id, { wire_api: 'chat', vision: true, image_tokens: 32768, rates: rates.map(value => value / 6), source: arkSource, updated: '2026-10-20' }]));
 // Conservative standard/long-context and cache-write ceilings, not an exact bill.
 const known = {
   'gpt-6-luna': { wire_api: 'responses', reasoning_effort: 'none', vision: true, image_tokens: 32768, rates: [.25, .02, .75], source: openaiSource },
@@ -16,12 +30,13 @@ export function normalizeServiceURL(value) {
   try { url = new URL(String(value).trim()); } catch { throw new Error('API 网址不完整，请复制服务商提供的 HTTPS 网址。'); }
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('API 网址需要 HTTPS，不能包含 Key、查询参数或账号密码。');
   url.pathname = url.pathname.replace(/\/+$/, '').replace(/\/(?:chat\/completions|responses|models)$/i, '');
-  if (!url.pathname || url.pathname === '/') url.pathname = '/v1';
+  if (!url.pathname || url.pathname === '/') url.pathname = url.hostname === 'ark.cn-beijing.volces.com' ? '/api/v3' : '/v1';
   return url.href.replace(/\/+$/, '');
 }
 
 export const serviceFingerprint = (base, key) => createHash('sha256').update(capabilityVersion + '\0' + normalizeServiceURL(base) + '\0' + key).digest('hex');
 export const endpointFor = (base, wire = 'responses') => normalizeServiceURL(base) + (wire === 'chat' ? '/chat/completions' : '/responses');
+export const arkModelList = base => normalizeServiceURL(base) === arkBase ? Object.keys(arkKnown).filter(id => !id.endsWith('-260215')).map(id => ({ id })) : null;
 
 function imageSize(bytes, format) {
   if (format === 'png' && bytes.length >= 24) return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
@@ -45,14 +60,14 @@ function imageSize(bytes, format) {
 }
 
 export function candidateModels(base, list) {
-  const host = new URL(normalizeServiceURL(base)).hostname;
-  const official = host === 'api.openai.com' ? 'openai' : host === 'api.deepseek.com' ? 'deepseek' : '';
+  const normalized = normalizeServiceURL(base), host = new URL(normalized).hostname;
+  const official = host === 'api.openai.com' ? 'openai' : host === 'api.deepseek.com' ? 'deepseek' : normalized === arkBase ? 'ark' : '';
   const models = new Map();
   for (const item of list) {
     if (!item || typeof item.id !== 'string' || !/^[a-zA-Z0-9._:/-]{1,120}$/.test(item.id) || models.has(item.id)) continue;
     if (/embed|rerank|whisper|tts|audio|realtime|dall-e|gpt-image|moderation|sora/i.test(item.id)) continue;
-    const hint = known[item.id];
-    const supported = hint && (official === 'openai' ? item.id.startsWith('gpt-') : official === 'deepseek' ? item.id.startsWith('deepseek-') : false);
+    const hint = official === 'ark' ? arkKnown[item.id] : known[item.id];
+    const supported = hint && (official === 'openai' ? item.id.startsWith('gpt-') : official === 'deepseek' ? item.id.startsWith('deepseek-') : official === 'ark');
     const quote = item.pricing;
     const priceKeys = ['input_per_million', 'cached_input_per_million', 'output_per_million'];
     const rates = quote && quote.currency === 'USD' && quote.scope === 'key' && priceKeys.every(k => typeof quote[k] === 'number' && Number.isFinite(quote[k]) && quote[k] >= 0) ? Object.fromEntries(priceKeys.map(k => [k, quote[k]])) : null;
@@ -61,7 +76,7 @@ export function candidateModels(base, list) {
     const imageTokens = supported ? hint.image_tokens : Number.isSafeInteger(item.max_image_tokens) && item.max_image_tokens > 0 && item.max_image_tokens <= 1050000 ? item.max_image_tokens : 0;
     models.set(item.id, { id: item.id, wire_api: wire, ...(supported && hint.reasoning_effort ? { reasoning_effort: hint.reasoning_effort } : {}), vision: supported ? hint.vision : Array.isArray(item.input_modalities) && item.input_modalities.includes('image') || Boolean(hint?.vision),
       image_tokens: imageTokens, pricing, price_source: supported ? hint.source : rates ? normalizeServiceURL(base) + '/models' : null,
-      price_updated: supported ? '2026-10-17' : rates ? new Date().toISOString() : null, price_kind: supported ? 'upper_bound' : rates ? 'provider_quote' : 'unknown',
+      price_updated: supported ? hint.updated || '2026-10-17' : rates ? new Date().toISOString() : null, price_kind: supported ? 'upper_bound' : rates ? 'provider_quote' : 'unknown',
       verified_text: false, verified_image: false, status: 'unverified', reason: pricing ? '尚未验证实际调用' : '价格无法核实，未进行付费测试' });
   }
   return [...models.values()].sort((a, b) => Number(Boolean(b.pricing)) - Number(Boolean(a.pricing)) || Number(b.vision) - Number(a.vision) ||
@@ -98,8 +113,9 @@ export function wireRequest(payload, profile) {
   const common = { model: payload.model };
   if (profile.wire_api === 'chat') {
     const content = typeof payload.input === 'string' ? payload.input : payload.input[0].content.map(p => p.type === 'input_text' ? { type: 'text', text: p.text } : { type: 'image_url', image_url: { url: p.image_url } });
-    return { ...common, messages: [{ role: 'user', content }], max_tokens: payload.max_output_tokens, stream: false,
-      ...(profile.id?.startsWith('deepseek-') && profile.price_source === deepseekSource ? { thinking: { type: 'disabled' } } : {}) };
+    const ark = profile.price_source === arkSource && Boolean(arkKnown[profile.id]);
+    return { ...common, messages: [{ role: 'user', content }], ...(ark ? { max_completion_tokens: payload.max_output_tokens } : { max_tokens: payload.max_output_tokens }), stream: false,
+      ...(ark || profile.id?.startsWith('deepseek-') && profile.price_source === deepseekSource ? { thinking: { type: 'disabled' } } : {}) };
   }
   return { ...common, ...(profile.reasoning_effort ? { reasoning: { effort: profile.reasoning_effort } } : {}), input: payload.input, store: false, max_output_tokens: payload.max_output_tokens, stream: true };
 }
@@ -123,7 +139,10 @@ export function serviceProblem(status, data) {
   const message = String(data?.error?.message || '').toLowerCase();
   const code = [data?.error?.code, data?.error?.type].filter(value => typeof value === 'string').join(' ').toLowerCase();
   if (status === 401) return 'Key 无效，请重新复制完整 Key，再点击「检测并保存」。';
-  if (status === 402 || /insufficient_quota|insufficient_balance|billing_hard_limit/.test(code) || /insufficient|余额不足|quota.*exceed|exceed.*quota/.test(message)) return '余额不足或额度用完，请到服务商后台检查余额，然后重新检测。';
+  if (/^(modelnotopen|invalidendpointormodel\.notfound|operationdenied\.servicenotopen)(?: |$)/.test(code)) return '当前模型未开通、不存在或无权访问，请到方舟控制台开通模型或选择已有权限的模型，再重新检测。';
+  if (/invalidendpointormodel\.modelidaccessdisabled/.test(code)) return '当前账号不允许通过模型 ID 调用，请到方舟控制台检查权限或使用有权限的推理接入点；接入点价格未核实时仍会阻止付费调用。';
+  if (/setlimitexceeded/.test(code)) return '已达到方舟模型或接入点的用量上限，请到方舟控制台调整用量上限或「安心体验模式」，再重新检测。';
+  if (status === 402 || /insufficient_quota|insufficient_balance|billing_hard_limit|accountoverdueerror|operationdenied\.serviceoverdue/.test(code) || /insufficient|余额不足|quota.*exceed|exceed.*quota/.test(message)) return '余额不足或额度用完，请到服务商后台检查余额，然后重新检测。';
   if (status === 403) return 'Key 没有调用权限，请到服务商后台检查权限，或修改 Key 后重新检测。';
   if (status === 429) return '解题服务繁忙或请求太频繁，请稍后重新检测。';
   if ([404, 405].includes(status)) return '当前 API 网址或模型接口不可用，请核对服务商提供的网址，再重新检测。';

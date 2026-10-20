@@ -1,0 +1,14 @@
+Standards review, base 323a4c4, source commit db5f389:
+未发现可行动的硬性标准违反；无须提出味道重构。
+已核对方舟报价由 CNY/百万 token 除以 6 转美元；官方地址严格匹配；总输出限制、预算上下界、失败预留及 Key 脱敏保留；未开通模型仅跳过对应候选，非方舟协议回退保留。
+Reviewer command: node --test szu-uooc/tests/{ark-service,api-protocol,service-detection,api-request}.test.mjs
+Result: 8 passed.
+
+Spec review, base 323a4c4, source commit db5f389:
+未发现可确认的缺失、越界扩展或错误实现。
+对照 ARK_API_VALIDATION.md，精确模型与常规长上下文价格和官方资料一致；只有官方标准地址继承价格；实际探测成功才标可用；404/405 兜底保持 3 候选、6 调用和 $0.02 预留限制；关闭思考并限制总输出；旧账本和 Key 保留逻辑未被削弱。
+Reviewer command: node --test szu-uooc/tests/ark-service.test.mjs
+Result: 5 passed.
+
+两名复核者均未调用真实方舟 Key、真实课程或检验发布包。
+发布包和界面验证由主 agent 独立执行，原始输出分别记录在 release-v0.1.15/package-api-tests.log 和 ark-fix-20261020/ui-acceptance.log。
