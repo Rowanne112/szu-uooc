@@ -1,0 +1,30 @@
+选项编号修复验收 · 2026-10-20
+
+发布版本 v0.1.17，脚本版本 0.10.0-local.28。
+
+诊断记录中，课程在 101/105 处报告“找不到唯一的原生选项ID”，浏览器、目录、环境和解题服务均已就绪；此前短暂失联已有恢复记录。诊断包排除了原题和页面快照，所以无法确认原题的 HTML 结构。
+
+在原生课程脚本的真实填写路径中，多个段落的选项能稳定复现同一报错。页面提取文本为 First lineSecond line，原生模型的另一种文本转换结果为 First line Second line；原先再次比较文本时无法匹配。
+
+修复位于 app/szu-uooc.user.js 的 applyKnownAnswer：从选项控件读取 value，核对其在原生选项模型及页面控件中分别唯一，再点击并核对保存后的答案。网站原生 addAnswer 同样保存控件 value。重复文本、缺失或重复编号、答案未同步时继续暂停。选择题 AI 回复使用选项位置序号，并兼容旧原文回复和原有文本缓存。
+
+发布包只改变 app/szu-uooc.user.js 与 文件校验.sha256。其他安装包文件与 v0.1.16 逐字节一致，使用已发布的 Windows/Mac 安装流程。
+
+验证：
+- 14 项专项测试通过：段落、块级元素、多选、判断、数值 0 键、字符串选项、模型乱序、缓存续跑；重复文本、缺失/错误/重复 ID、重复控件值、模型未同步时仍阻止提交。
+- 原有课程、图片、填空、验证、恢复及诊断回归 40 项通过，0 失败。4 项 Windows 安装测试在 macOS 因无 PowerShell 跳过；该批用例不是本次未修改安装流程的 Windows 实机证明。
+- ZIP 完整性、逐文件 SHA-256、版本及源代码一致检查通过。所有测试使用独立测试浏览器与模拟服务，没有真实课程写入或付费调用。
+
+原始证据（相对于本文件）：
+evidence/native-options-20261020/reproduction-before.txt
+evidence/native-options-20261020/native-option-tests.txt
+evidence/native-options-20261020/course-regression.txt
+evidence/native-options-20261020/package-verification.json
+
+可重跑的回归：按 app/package-lock.json 安装依赖后，在 app 目录执行：
+node --test tests/course-option-mapping.test.cjs
+测试需要 Chromium；可以使用 Playwright 安装的 Chromium，或通过 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH 指定测试浏览器。测试只访问被拦截的模拟网页。
+
+验收步骤：退出旧程序，完整解压新版并启动；连接原来的 Chrome/Edge，继续暂停课程，确认能越过原暂停点。新导出的诊断包应显示 0.10.0-local.28。
+
+边界：尚未在原 Windows 电脑安装，也未验证原题的实际续跑；诊断包未包含原题。

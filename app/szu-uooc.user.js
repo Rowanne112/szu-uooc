@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.26
+// @version      0.10.0-local.28
 // @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -44,7 +44,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.26';
+  const SCRIPT_VERSION = '0.10.0-local.28';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -3911,18 +3911,16 @@
       return matches[0];
     });
     const optionArray = Array.isArray(q.options) ? q.options : [];
-    const expectedKeys = selectedOptions.map((pick) => {
-      const matches = optionArray.filter((item) => {
-        if (!pick.images?.length) return normalizedAnswerText(typeof item === 'string' ? item : discussionHtmlToText(item.text)) === normalizedAnswerText(pick.text);
-        const template = live.container.ownerDocument.createElement('template');
-        template.innerHTML = typeof item === 'string' ? item : item.text;
-        const urls = [...template.content.querySelectorAll('img')].map(img => { try { return new URL(img.getAttribute('data-src') || img.getAttribute('src'), live.container.ownerDocument.baseURI).href; } catch { return ''; } });
-        return JSON.stringify(urls) === JSON.stringify(pick.images.map(img => img.url)) && normalizedAnswerText(textFromElement(template.content, [], '选项' + pick.label + '图片')) === normalizedAnswerText(pick.text);
-      });
-      if (matches.length !== 1) throw new Error('找不到唯一的原生选项ID');
-      return String(typeof matches[0] === 'string' ? optionArray.indexOf(matches[0]) : matches[0].key);
-    }).sort();
     const nodes = Array.from(live.container.querySelectorAll('.ti-a'));
+    const expectedKeys = selectedOptions.map((pick) => {
+      // UOOC's addAnswer saves the control value; HTML text and shuffled letters are not native IDs.
+      const input = pick.node.querySelector('input[type=checkbox],input[type=radio]');
+      if (!input || !input.hasAttribute('value') || !input.value) throw new Error('原生选项控件缺失');
+      const key = input.value;
+      const matches = optionArray.filter((item, index) => typeof item === 'string' ? String(index) === key : item?.key != null && String(item.key) === key);
+      if (matches.length !== 1 || nodes.filter(node => node.querySelector('input[type=checkbox],input[type=radio]')?.value === key).length !== 1) throw new Error('找不到唯一的原生选项ID');
+      return key;
+    }).sort();
     for (const node of nodes) {
       const text = normalizedAnswerText(live.options.find(option => option.node === node)?.text);
       const input = node.querySelector('input[type=checkbox],input[type=radio]');
@@ -4295,7 +4293,7 @@
     const rawPrices = [state.config.aiInputPrice, state.config.aiCachedInputPrice, state.config.aiOutputPrice];
     const prices = rawPrices.map(Number);
     if (!state.config.aiModel || rawPrices.some((value) => value === '' || value == null) || prices.some((price) => !Number.isFinite(price) || price < 0)) throw new Error('价格无法核实，已阻止付费解题；请修改服务后点击「检测并保存」。');
-    const prompt = '逐题给出答案，仅返回JSON。single为单选或判断，只返回一个选项；multiple为多选，逐项判断并返回全部正确选项原文，不得漏选；fill为填空，answers必须按空格从左到右填写完整文本。格式：{"answers":[{"index":0,"answers":["正确选项原文"]}]}。题目=' + JSON.stringify(questions.map(({ index, question, type, options, blankCount }) => ({ index, type: canonicalQuestionType(type), question, options: options.map((option) => option.text), blankCount })));
+    const prompt = '逐题给出答案，仅返回JSON。single为单选或判断，只选一个；multiple为多选，逐项判断并选出全部正确选项，不得漏选。选择题只返回option_indices，使用本题options中的index（从0开始），不要返回页面字母、选项原文或改写文本。fill为填空，answers必须按空格从左到右填写完整文本。选择题格式：{"answers":[{"index":0,"option_indices":[0]}]}；填空题格式：{"answers":[{"index":1,"answers":["完整填空文本"]}]}。题目=' + JSON.stringify(questions.map(({ index, question, type, options, blankCount }) => ({ index, type: canonicalQuestionType(type), question, options: options.map((option, index) => ({ index, text: option.text })), blankCount })));
     const images = questions.flatMap(q => [...(q.images || []), ...q.options.flatMap(o => o.images || [])].map(image => ({ ...image, label: '题号' + q.index + '：' + image.label })));
     let input = prompt;
     if (images.length) {
@@ -4317,8 +4315,15 @@
     const answers = new Map();
     for (const entry of parsed.answers) {
       const target = questions.find((item) => item.index === entry.index);
-      if (!Number.isSafeInteger(entry.index) || answers.has(entry.index) || !target || !Array.isArray(entry.answers) || !entry.answers.length || entry.answers.some((value) => typeof value !== 'string' || !value.trim()) || (canonicalQuestionType(target.type) !== 'fill' && new Set(entry.answers.map(normalizedAnswerText)).size !== entry.answers.length)) throw new Error('AI批量答案包含重复/未知题号、重复选择或空/非文本答案');
-      answers.set(entry.index, entry.answers);
+      if (!Number.isSafeInteger(entry.index) || answers.has(entry.index) || !target) throw new Error('AI批量答案包含重复/未知题号、重复选择或空/非文本答案');
+      let values = entry.answers;
+      if (Object.hasOwn(entry, 'option_indices')) {
+        const indices = entry.option_indices, type = canonicalQuestionType(target.type);
+        if (!['single', 'multiple'].includes(type) || !Array.isArray(indices) || !indices.length || (type === 'single' && indices.length !== 1) || indices.some(index => !Number.isSafeInteger(index) || index < 0 || index >= target.options.length) || new Set(indices).size !== indices.length) throw new Error('AI选项序号无效，已暂停');
+        values = indices.map(index => target.options[index].text);
+      }
+      if (!Array.isArray(values) || !values.length || values.some((value) => typeof value !== 'string' || !value.trim()) || (canonicalQuestionType(target.type) !== 'fill' && new Set(values.map(normalizedAnswerText)).size !== values.length)) throw new Error('AI批量答案包含重复/未知题号、重复选择或空/非文本答案');
+      answers.set(entry.index, values);
     }
     return answers;
   }

@@ -1,0 +1,57 @@
+✔ free mode fills missing choice answers without a Key, reuses them on verification retry and never caches random answers (15583.074ms)
+✔ free mode keeps known answers and leaves missing fill answers for a human (9309.866292ms)
+✔ free mode maps 11 random 0.1 to native option ids without an empty answer (5372.593542ms)
+✔ free mode maps 11 random 0.99 to native option ids without an empty answer (5499.935625ms)
+✔ free mode maps 20 random 0.1 to native option ids without an empty answer (6295.235625ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (8030.366375ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (17801.575125ms)
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (13838.792667ms)
+✔ repeated verification failures wait the full backoff and pause after three reopen attempts (12847.060292ms)
+✔ human verification during a pending retry submits once without reopening (5431.278084ms)
+✔ verification retry restores answers after the same quiz iframe and its answer model are replaced (9533.125ms)
+✔ human verification during retry answer synchronization keeps its new scope result (5573.476625ms)
+✔ pause cancels a scheduled verification retry (5005.546417ms)
+✔ stop cancels a scheduled verification retry (4781.134125ms)
+✔ changed questions cannot reopen verification using an earlier answer (5274.181417ms)
+✔ a transient native click error keeps the controller connected and retries after five seconds (11358.54975ms)
+✔ a delayed click from an older verification attempt cannot click a reopened widget (8564.619209ms)
+✔ the same quiz iframe can be replaced while waiting for AI and receives its answers without another request (5371.873083ms)
+✔ replacing a quiz with different question text while AI is pending cannot apply or submit the earlier answer (3218.919416ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (8267.17825ms)
+✔ a human verification callback that replaces the page model continues the same task without restart (7333.560375ms)
+✔ a native verification callback can retain the course source id instead of the exam id (5452.442583ms)
+✔ a fast human submit waits for delayed platform completion after verification state is cleared (13323.047084ms)
+✔ a fast human submit after quiz iframe replacement waits for platform completion without reopening (15513.446625ms)
+✔ explicitly cancelling native verification still pauses without submitting (7298.45975ms)
+✔ briefly hidden native verification can return after the dialog has been open for three seconds (13193.896833ms)
+✔ a verification callback from another task cannot submit the current quiz (5341.82025ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (3404.840125ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (3367.488792ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (7339.684333ms)
+✔ a second copy of the course script cannot overwrite a live runner with idle state (5790.352208ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (3539.303667ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (5503.81675ms)
+✔ an original course tab can finish its login redirect before the controller validates its URL (3483.664375ms)
+✔ three videos naturally end in sequence and the following chapter quiz completes without external clicks (9273.356ms)
+✔ persistent native verification click errors exhaust three attempts and safely wait for a human (21553.454041ms)
+选择题验收：序号映射、原文兼容、单选多选与填空混合、乱序字母及缓存；无效序号和歧义答案保留暂停保护，均不追加付费请求。
+图片验收：题干与图片选项实际发送、标签对应、原生答案键映射、读图失败和缺少识图模型时停止。全部使用自带测试图及模拟 AI。
+填空验收：题库、模拟 AI 和缓存保留多空顺序、重复答案及代码空白；保存值失真、题库冲突、空数不符和空答案均阻止提交。无真实平台或付费请求。
+✔ tests/course-controller.test.cjs (67628.504375ms)
+课程恢复：网络断开/无响应与导航超时自动恢复，持续503有限退避，401安全暂停，媒体重载→原生重开→耗尽暂停，恢复预算跨刷新，播放断点不冒充完成，停止后迟到响应不污染新任务。无真实平台或付费请求。
+✔ tests/course-recovery.test.cjs (16623.817917ms)
+✔ allowlisted diagnostics remove credentials, course identity and content, handle absent/corrupt evidence and create a real ZIP (80.081667ms)
+✔ authenticated ZIP download works during learning and UI failures remain retryable (1702.677042ms)
+﹣ Windows installer supports Chinese, spaces and square brackets through download, components and restart (0.67575ms) # SKIP
+﹣ Windows checksum failure explains its stage and preserves a complete local error (0.047667ms) # SKIP
+﹣ Windows extraction failure reports the actual cause and releases the installer lock (0.039417ms) # SKIP
+﹣ Windows launcher finds and removes its ready file in a bracketed installation path (0.037708ms) # SKIP
+ℹ tests 44
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 299524.246542

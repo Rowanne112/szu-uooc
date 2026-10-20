@@ -1,0 +1,22 @@
+✔ native option mapping: paragraphs (2230.093583ms)
+✔ native option mapping: blocks (762.008625ms)
+✔ native option mapping: multiple (811.854167ms)
+✔ native option mapping: judgement (846.245833ms)
+✔ native option mapping: numeric-key (822.184333ms)
+✔ native option mapping: string-options (716.47875ms)
+✔ native option mapping: reordered-model (891.296041ms)
+✔ native option mapping: duplicate-text (374.282541ms)
+✔ native option mapping: missing-value (558.44775ms)
+✔ native option mapping: missing-key (350.375417ms)
+✔ native option mapping: duplicate-key (441.101291ms)
+✔ native option mapping: wrong-key (443.486584ms)
+✔ native option mapping: duplicate-control-value (383.296125ms)
+✔ native option mapping: unsynced-model (351.114083ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10257.269792

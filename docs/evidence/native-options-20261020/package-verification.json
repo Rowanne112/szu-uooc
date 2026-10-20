@@ -1,0 +1,26 @@
+{
+  "release": "v0.1.17",
+  "userscript_version": "0.10.0-local.28",
+  "zip_sha256": "0a9129007be3312c70fce14443e47e795b90e620ec68ca5de4492a6a9de6e72f",
+  "zip_bytes": 228488,
+  "changed_package_files": [
+    "app/szu-uooc.user.js",
+    "文件校验.sha256"
+  ],
+  "unchanged_runtime_files_match_v0_1_16": true,
+  "source_script_matches": true,
+  "verified_manifest_entries": 32,
+  "zip_integrity": "passed",
+  "package_matches_repository": true,
+  "native_option_tests": {
+    "passed": 14,
+    "failed": 0
+  },
+  "course_regression": {
+    "passed": 40,
+    "failed": 0,
+    "windows_installer_skipped": 4
+  },
+  "paid_api_requests": 0,
+  "windows_real_course_tested": false
+}
