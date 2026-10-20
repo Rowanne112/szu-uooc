@@ -1,0 +1,17 @@
+{
+  "tag": "v0.1.16",
+  "url": "https://github.com/zcx28/szu-uooc/releases/tag/v0.1.16",
+  "release_commit": "d56d47fdd2a8fc55202f6038cd3ca95042829798",
+  "sha256": "3d3687de71313f893d928b35df217e8aaf292c788c9c35dc50df0f961f3a6a9b",
+  "bytes": 228301,
+  "matches_uploaded_package": true,
+  "github_asset_digest_matches": true,
+  "checksums_verified": 32,
+  "frontend_files_match_source": [
+    "student/console.html",
+    "student/console.css",
+    "student/console.js",
+    "student/user-guidance.mjs"
+  ],
+  "other_runtime_files_match_v0_1_15": true
+}

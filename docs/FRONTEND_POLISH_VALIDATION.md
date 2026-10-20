@@ -44,3 +44,9 @@ node --test --test-concurrency=2 tests/api*.test.mjs tests/ark-service.test.mjs 
 完整工作区首次结果为 169 通过、4 失败、4 跳过：两项文案期望已对齐并由解包验收复测；另两项为独立控制器测试的导航上下文销毁和浏览器清理重复释放，相关用例单独串行复测 33 项通过、0 失败。保留首次失败输出，没有通过修改控制器或放宽其断言规避失败。
 
 Windows 专用检查在 macOS 跳过。真实 Windows、真实网站验证提交、真实方舟账号余额/权限及付费答题准确率不在本次模拟验收结论内。
+
+## 发布验证
+
+[v0.1.16](https://github.com/zcx28/szu-uooc/releases/tag/v0.1.16) 已发布。从公开 `releases/latest/download/` 实际回下载 ZIP 和 SHA256SUMS，确认均为本次文件；32 项包内校验通过，四个前端文件与源码一致，其余运行文件与 v0.1.15 一致。
+
+SHA-256：`3d3687de71313f893d928b35df217e8aaf292c788c9c35dc50df0f961f3a6a9b`。原始记录见 [最新版回下载验证](evidence/frontend-20261020/latest-verification.json)。
