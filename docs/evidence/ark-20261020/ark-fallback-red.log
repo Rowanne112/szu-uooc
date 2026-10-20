@@ -1,0 +1,45 @@
+✔ official Ark models without a pricing extension pass detection and answer through the course API (16.763625ms)
+✖ Ark without /models tries bounded official candidates and skips unopened models without changing protocol (1.59025ms)
+✔ only the official Ark base inherits known prices and defaults to /api/v3 (0.503833ms)
+✖ Ark lists returning auth, billing or network errors never trigger paid fallback calls (3.924166ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 2
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 62.599833
+
+✖ failing tests:
+
+test at tests/ark-service.test.mjs:55:1
+✖ Ark without /models tries bounded official candidates and skips unopened models without changing protocol (1.59025ms)
+  Error: 当前 API 网址或模型接口不可用，请核对服务商提供的网址，再重新检测。
+      at detectService (file://<user-home>/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/student/service-detection.mjs:24:59)
+      at async TestContext.<anonymous> (file://<user-home>/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/ark-service.test.mjs:59:20)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7)
+
+test at tests/ark-service.test.mjs:86:1
+✖ Ark lists returning auth, billing or network errors never trigger paid fallback calls (3.924166ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /余额|欠费/. Input:
+
+  'Error: Key 没有调用权限，请到服务商后台检查权限，或修改 Key 后重新检测。'
+
+      at async TestContext.<anonymous> (file://<user-home>/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/ark-service.test.mjs:91:7)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: Error: Key 没有调用权限，请到服务商后台检查权限，或修改 Key 后重新检测。
+        at detectService (file://<user-home>/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/student/service-detection.mjs:25:27)
+        at async waitForActual (node:assert:646:5)
+        at async strict.rejects (node:assert:769:25)
+        at async TestContext.<anonymous> (file://<user-home>/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/ark-service.test.mjs:91:7)
+        at async Test.run (node:internal/test_runner/test:1389:7)
+        at async Test.processPendingSubtests (node:internal/test_runner/test:960:7),
+    expected: /余额|欠费/,
+    operator: 'rejects',
+    diff: 'simple'
+  }

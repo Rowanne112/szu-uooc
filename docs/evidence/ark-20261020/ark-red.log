@@ -1,0 +1,28 @@
+✖ official Ark models without a pricing extension pass detection and answer through the course API (12.95475ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 53.480542
+
+✖ failing tests:
+
+test at tests/ark-service.test.mjs:14:1
+✖ official Ark models without a pricing extension pass detection and answer through the course API (12.95475ms)
+  AssertionError [ERR_ASSERTION]: 已读取模型列表，但价格无法核实，无法安全执行付费检测和预算保护。请修改服务；无需填写价格或模型名称。
+
+  'blocked' !== 'ready'
+
+      at TestContext.<anonymous> (file://<user-home>/Documents/ChatGPT/%E6%8F%92%E4%BB%B6/szu-uooc/tests/ark-service.test.mjs:36:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 'blocked',
+    expected: 'ready',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

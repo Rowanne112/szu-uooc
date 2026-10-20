@@ -1,0 +1,49 @@
+✔ ../dist/release-v0.1.15/acceptance/szu-uooc-新手版/app/tests/api-auth-recovery.test.mjs (64.688417ms)
+✔ ../dist/release-v0.1.15/acceptance/szu-uooc-新手版/app/tests/api-images.test.mjs (61.050375ms)
+✔ switching models preserves legacy entries and records the new model and prices per request (15.733958ms)
+✔ switching models still counts old known costs and reservations against the same course budget (1.397041ms)
+✔ switching models cannot bypass an unresolved HTTP 502 charge (1.6635ms)
+✔ ../dist/release-v0.1.15/acceptance/szu-uooc-新手版/app/tests/api-protocol.test.mjs (29.863959ms)
+✔ a managed rate-limited task waits and recovers within budget while retaining the unknown reservation (18.142625ms)
+✔ persistent managed rate limits stop after three attempts without erasing reservations (6.869333ms)
+✔ cancelling after a rate-limited attempt sends nothing else and cannot claim the call was never sent (2.937625ms)
+✔ quota errors and long Retry-After responses cannot create an automatic retry loop (2.082208ms)
+✔ a retry rechecks the remaining budget before sending another request (1.669583ms)
+✔ Retry-After is respected and cancellation during that wait prevents another paid request (1003.009375ms)
+✔ a managed HTTP 200 stream timeout recovers without pausing or erasing its unknown charge (9.434833ms)
+✔ persistent stream interruptions exhaust two retries and do not grant another recovery cycle (133.672625ms)
+✔ pausing during stream recovery backoff prevents another paid dispatch (2.8395ms)
+✔ stream recovery rechecks its budget and never retries malformed or unmetered responses (12.126583ms)
+✔ unmanaged stream timeouts stay blocked while a live managed network interruption can recover (25.312042ms)
+✔ an earlier rate limit does not skip the first ten-second stream recovery delay (7.178709ms)
+API transport self-check passed: pricing, usage/cache, budget, model, credential isolation, SSE, unknown charge, concurrency. No network requests.
+✔ ../dist/release-v0.1.15/acceptance/szu-uooc-新手版/app/tests/api-request.test.mjs (108.692ms)
+✔ explicit resume retains the complete old 502 reservation and records its recovery on the new request (14.656792ms)
+✔ a new 502 cannot be retried until a new explicit resume and cannot trigger the managed retry loop (2.9675ms)
+✔ an old HTTP 200 without usage can be explicitly resumed without erasing or zeroing its reserved charge (1.921833ms)
+✔ explicit resume cannot bypass the shared budget, invalid amounts, metering overflow, pending requests or other unknown failures (3.378083ms)
+✔ real fetch SSE deadlines recover with reservations and normalize only the owned timeout AbortError (325.298417ms)
+✔ an unrelated abort after HTTP 200 remains unknown and cannot auto-retry (14.106541ms)
+✔ a real broken response stream recovers but a failure before headers remains blocked (17.321833ms)
+✔ rate limits use exponential waits and report exhaustion without losing reservations (3.829208ms)
+✔ HTTP-date Retry-After is respected and invalid or long waits require human recovery (4.484167ms)
+✔ a throwing recovery logger cannot change a paid request outcome (1.629084ms)
+✔ cancelling during ledger mkdir prevents dispatch and releases only the unsent reservation (1.002375ms)
+✔ cancelling during ledger readFile prevents dispatch and releases only the unsent reservation (0.926875ms)
+✔ cancelling during ledger rename prevents dispatch and releases only the unsent reservation (0.836583ms)
+✔ cancelling an unsent retry keeps the earlier paid attempt unknown and cannot claim the operation was never sent (1.534042ms)
+✔ official Ark models without a pricing extension pass detection and answer through the course API (18.571292ms)
+✔ Ark without /models tries bounded official candidates and skips unopened models without changing protocol (10.70675ms)
+✔ only the official Ark base inherits known prices and defaults to /api/v3 (0.234791ms)
+✔ Ark lists returning auth, billing or network errors never trigger paid fallback calls (3.679584ms)
+✔ course errors retain Ark billing and usage-limit guidance and keep unknown cost reservations (2.148667ms)
+✔ ../dist/release-v0.1.15/acceptance/szu-uooc-新手版/app/tests/console-detection.test.mjs (92.368792ms)
+✔ ../dist/release-v0.1.15/acceptance/szu-uooc-新手版/app/tests/service-detection.test.mjs (59.907292ms)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1366.405667

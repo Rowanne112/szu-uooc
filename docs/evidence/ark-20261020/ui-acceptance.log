@@ -1,0 +1,1 @@
+PASS: extracted release UI detects/saves Ark text+image, shows conservative CNY rate, preserves settings on restart, hides Key, and fits 1440px/390px. Provider responses are fixtures; no paid service or real course used.
