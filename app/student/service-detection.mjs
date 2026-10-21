@@ -45,7 +45,7 @@ export async function detectService({ base_url, api_key, model = '', dataDir, fe
     const text = '仅返回JSON：{"answers":[{"index":0,"answers":["答案"]}]}。' + (image ? '图中有几个红色方块？答案只能是1、2、3、4之一。' : '计算1+1，答案只能是2或3。');
     const input = image ? [{ role: 'user', content: [{ type: 'input_text', text }, { type: 'input_image', image_url: testImage }] }] : text;
     const api = createAPI({ base_url: base, api_key, model: profile.id, budget: .02, pricing: profile.pricing, profile: { ...profile, verified_text: true, verified_image: true }, test_probe: true }, ledgerDir, countedFetch);
-    const reply = await api(run, { method: 'POST', url: endpointFor(base), timeout: 30000, data: JSON.stringify({ model: profile.id, input, store: false, max_output_tokens: 512 }) });
+    const reply = await api(run, { method: 'POST', url: endpointFor(base), timeout: 120000, data: JSON.stringify({ model: profile.id, input, store: false, max_output_tokens: 512 }) });
     const result = JSON.parse(reply.responseText);
     const parsed = parseAnswerJSON((result.output || []).flatMap(item => item.content || []).filter(p => p.type === 'output_text').map(p => p.text).join(''));
     if (!Array.isArray(parsed.answers) || parsed.answers.length !== 1 || parsed.answers[0].index !== 0 || JSON.stringify(parsed.answers[0].answers) !== JSON.stringify([image ? '3' : '2'])) throw new Error(image ? '测试图片的答案不符合要求，图片能力未验证。' : '文字测试的答案格式或结果不符合要求。');
