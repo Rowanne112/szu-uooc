@@ -17,6 +17,11 @@ function toast(message, error = false) {
   clearTimeout(toastTimeout); toastTimeout = setTimeout(() => element.hidden = true, error ? 6500 : 3000);
 }
 function money(amount) { return amount === null ? '待核对' : amount > 0 && amount < .0001 ? '< $0.0001' : '$' + Number(amount || 0).toFixed(4); }
+function courseCosts(course) {
+  const costs = course.costs;
+  const processing = state.activeIds.includes(course.id) && course.phase === 'solving' && costs.pending > 0 && costs.unresolvedRequests === costs.pending && costs.unknownRequests === 0;
+  return `费用 ${money(costs.spent)}${costs.reserved ? (processing ? ' · 处理中 ' : ' · 待核对 ') + money(costs.reserved) : ''}${costs.unknown && !processing ? ' · 请核对账单' : ''}`;
+}
 function detectionCost(costs) { return `预估 ${money(costs.estimated_usd)}${costs.unknown ? ' · 费用待核对' : ''}`; }
 function percent(course) { return course.total ? Math.max(0, Math.min(100, Math.round(course.completed / course.total * 100))) : 0; }
 function progress(course) {
@@ -67,10 +72,13 @@ function renderGuide() {
   document.querySelectorAll('#onboarding button').forEach(button => button.disabled = busy);
 }
 function courseHelp(course) {
+  if (course.costs.unreadable || course.costs.meteringBoundExceeded) return `<div class="course-help" role="status"><p>${esc(explainProblem('费用记录异常'))}</p></div>`;
+  const billing = /上次请求费用未知|结果或费用未知|已自动(?:补跑|重试) 2 次/.test(course.error);
+  if (course.costs.recoveryRequired && (!course.error || ['用户暂停','用户停止'].includes(course.error) || billing)) return `<div class="course-help" role="status"><p>${esc(explainProblem('上次请求费用未知'))}</p></div>`;
   const issue = serviceActionFor(course.error);
   const service = /Key|API|HTTP\s*[45]\d\d|解题服务|模型|图片|价格|余额|费用未知|用量上限/.test(course.error);
   const manual = /图片|识图|测验|视频|资源|交卷|验证|答案|选项|断点|锁定|闯关/.test(course.error);
-  const serviceButton = service ? `<button class="button secondary" data-fix-service="${esc(course.id)}" data-service-kind="${issue}" ${issue === 'retry' ? 'data-service-retry="true"' : ''}>${{ key: '修改 Key', retry: '重新检测', model: '更换模型', url: '修改服务' }[issue]}</button>` : '';
+  const serviceButton = service && !billing ? `<button class="button secondary" data-fix-service="${esc(course.id)}" data-service-kind="${issue}" ${issue === 'retry' ? 'data-service-retry="true"' : ''}>${{ key: '修改 Key', retry: '重新检测', model: '更换模型', url: '修改服务' }[issue]}</button>` : '';
   const courseLink = state.activeIds.includes(course.id) ? `data-course="${esc(course.id)}" data-action="focus"` : `data-course-open="${esc(course.id)}"`;
   return `<div class="course-help" role="status"><p>${esc(explainProblem(course.error, browserName()))}</p>${service || manual ? `<span class="dialog-actions">${serviceButton}${manual ? `<button class="button secondary" ${courseLink}>打开课程</button>` : ''}</span>` : ''}</div>`;
 }
@@ -94,7 +102,7 @@ function render() {
     const awaiting = course.status === 'running' && course.phase === 'awaiting_verification' && state.activeIds.includes(course.id);
     const canStart = (state.config.hasKey || state.config.answer_mode === 'free') && state.environment.status === 'ready' && state.browser?.status === 'connected' && !state.browser.needsCourseRefresh;
     const control = !canStart && !state.activeIds.includes(course.id) ? '' : buttons(course);
-    return `<article class="course-row" data-id="${esc(course.id)}"><div class="course-name"><h3>${esc(course.name)}</h3><p>${esc(course.currentTitle || (course.status === 'ready' ? '' : course.phaseLabel || ''))}</p></div><div class="course-progress"><div class="course-status ${esc(awaiting ? course.phase : course.status)}"><span>${esc(awaiting ? '待验证' : course.statusLabel)}</span><span>${course.total ? `${Number(course.completed) || 0} / ${Number(course.total)}` : '—'}</span></div>${progress(course)}</div><div class="course-buttons">${control}<details class="course-menu"><summary aria-label="${esc(course.name)}更多操作"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary><div>${state.activeIds.includes(course.id) ? `<button data-course="${esc(course.id)}" data-action="focus">切到课程</button>` : `<button data-course-open="${esc(course.id)}">打开课程</button>`}<button data-edit-course="${esc(course.id)}">课程与签到</button>${state.activeIds.includes(course.id) ? `<button data-course="${esc(course.id)}" data-action="stop">停止学习</button>` : `<button data-course="${esc(course.id)}" data-action="remove">移出列表</button>`}<span class="field-help">费用 ${money(course.costs.spent)}${course.costs.reserved ? ' · 待核对 ' + money(course.costs.reserved) : ''}${course.costs.unknown ? ' · 请核对账单' : ''}</span></div></details></div>${course.error && !['用户暂停','用户停止'].includes(course.error) ? courseHelp(course) : awaiting ? '<p class="course-help">完成验证后保持课程页打开。</p>' : ''}</article>`;
+    return `<article class="course-row" data-id="${esc(course.id)}"><div class="course-name"><h3>${esc(course.name)}</h3><p>${esc(course.currentTitle || (course.status === 'ready' ? '' : course.phaseLabel || ''))}</p></div><div class="course-progress"><div class="course-status ${esc(awaiting ? course.phase : course.status)}"><span>${esc(awaiting ? '待验证' : course.statusLabel)}</span><span>${course.total ? `${Number(course.completed) || 0} / ${Number(course.total)}` : '—'}</span></div>${progress(course)}</div><div class="course-buttons">${control}<details class="course-menu"><summary aria-label="${esc(course.name)}更多操作"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></summary><div>${state.activeIds.includes(course.id) ? `<button data-course="${esc(course.id)}" data-action="focus">切到课程</button>` : `<button data-course-open="${esc(course.id)}">打开课程</button>`}<button data-edit-course="${esc(course.id)}">课程与签到</button>${state.activeIds.includes(course.id) ? `<button data-course="${esc(course.id)}" data-action="stop">停止学习</button>` : `<button data-course="${esc(course.id)}" data-action="remove">移出列表</button>`}<span class="field-help">${courseCosts(course)}</span></div></details></div>${(course.error && !['用户暂停','用户停止'].includes(course.error) || !['running','starting','pausing','stopping','complete'].includes(course.status) && (course.costs.recoveryRequired || course.costs.unreadable || course.costs.meteringBoundExceeded)) ? courseHelp(course) : awaiting ? '<p class="course-help">完成验证后保持课程页打开。</p>' : ''}</article>`;
   }).join(''));
   updateHTML('#log-list', [...state.logs].reverse().map(log => ({...log, text: activityMessage(log.message, browserName())})).filter(log => log.text).map(log => `<li><time>${new Date(log.at).toLocaleTimeString('zh-CN', { hour12: false })}</time>${esc(log.text)}</li>`).join(''));
   if (state.checkin) {
@@ -291,7 +299,7 @@ async function detectAndSave(force = false) {
       const result = await api('/api/detect-save', { ...values, force });
       if (result.detection) { showDetection(result.detection); $('#api-key').value = ''; $('#api-key').placeholder = '已保存，留空不修改'; $('#base-url').value = result.detection.base_url; }
       const costs = result.detection?.testCosts;
-      $('#test-result').textContent = (result.connection.status === 'error' ? explainProblem(result.connection.message, browserName()) : '连接成功，已保存') + (costs?.calls ? ` · 本次${detectionCost(costs)}` : ''); $('#test-result').classList.toggle('error', result.connection.status === 'error'); $('#test-result').classList.toggle('success', result.connection.status !== 'error');
+      $('#test-result').textContent = (result.connection.status === 'error' ? explainProblem(result.connection.message, browserName()) : '连接成功，已保存。回到课程点「继续」恢复学习') + (costs?.calls ? ` · 本次${detectionCost(costs)}` : ''); $('#test-result').classList.toggle('error', result.connection.status === 'error'); $('#test-result').classList.toggle('success', result.connection.status !== 'error');
       if (result.connection.status === 'error') $('#service-actions').innerHTML = serviceActions(result.connection.message);
     } catch (error) { $('#settings-error').textContent = explainProblem(error.message, browserName()); $('#service-actions').innerHTML = serviceActions(error.message); }
     finally { button.disabled = false; fields.forEach(([field, disabled]) => field.disabled = disabled); updatePrices(); $('#settings-form').removeAttribute('aria-busy'); }

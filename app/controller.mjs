@@ -20,6 +20,9 @@ const commandSource = options.commands || process;
 const consoleIndex = args.indexOf('--console');
 const consoleMode = consoleIndex >= 0;
 if (consoleMode) args.splice(consoleIndex, 1);
+const resumeBillingIndex = args.indexOf('--resume-billing');
+const resumeBilling = resumeBillingIndex >= 0;
+if (resumeBilling) args.splice(resumeBillingIndex, 1);
 let requestedCommand = options.initialCommand || '';
 let userPaused = requestedCommand === 'pause';
 let handleCommand = () => {};
@@ -67,7 +70,7 @@ const bank = await fs.readFile(path.join(here, 'data/answers.json'), 'utf8');
 if (!Array.isArray(JSON.parse(bank).questions)) throw new Error('答案库结构无效');
 const script = await fs.readFile(path.join(here, 'szu-uooc.user.js'), 'utf8');
 const requestAPI = createAPI(config, path.join(privateDir, 'ledger'), options.fetchAPI || fetch, report);
-if (config.answer_mode !== 'free' && consoleMode && !['pause', 'stop'].includes(requestedCommand)) await requestAPI.prepareResume(expectedCourse);
+if (config.answer_mode !== 'free' && resumeBilling && !['pause', 'stop'].includes(requestedCommand)) await requestAPI.prepareResume(expectedCourse);
 report(options.browser ? '使用所选浏览器的已有课程会话。' : '连接已登录的 Chrome。请先在 chrome://inspect/#remote-debugging 开启调试，并在 Chrome 提示中批准本次连接。');
 const cdpEndpoint = process.env.SZU_UOOC_CDP_ENDPOINT || 'chrome';
 if (cdpEndpoint !== 'chrome' && !['127.0.0.1', 'localhost'].includes(new URL(cdpEndpoint).hostname)) throw new Error('调试连接仅允许本机浏览器。');
@@ -421,13 +424,10 @@ try {
             } catch (error) {
               if (!stopping && !userPaused) {
                 verificationClickFailures++;
-                if (verificationClickFailures >= 3) {
-                  await pauseRecovery('原生验证控件连续点击失败，自动重试已达上限（3/3）：' + safeMessage(error) + '。请检查控件遮挡或网络后人工处理，再点击继续。', 'verification_click_exhausted');
-                } else {
-                  const waitMs = 5000 * 2 ** (verificationClickFailures - 1);
-                  verificationAttempted = ''; verificationRetryAt = Date.now() + waitMs;
-                  report(`原生验证点击未完成 ${verificationClickFailures}/3，${waitMs / 1000}秒后重试：` + safeMessage(error));
-                }
+                const waitMs = Math.min(60000, 5000 * 2 ** Math.min(verificationClickFailures - 1, 4));
+                verificationAttempted = ''; verificationRetryAt = Date.now() + waitMs;
+                report(`原生验证点击未完成 ${verificationClickFailures} 次，${waitMs / 1000}秒后重试：` + safeMessage(error));
+                await journalRecovery('verification_click_retry', error, `native_input_${verificationClickFailures}`);
               }
             }
           }

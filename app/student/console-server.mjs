@@ -12,6 +12,7 @@ import { checkinURL, discoverBrowser, browserTypes } from './checkin-browser.mjs
 import { normalizeServiceURL } from '../api-protocol.mjs';
 import { detectService } from './service-detection.mjs';
 import { diagnosticZip } from './diagnostics.mjs';
+import { readCourseCosts } from '../api-ledger.mjs';
 
 const phases = { opening: '打开学习资源', connecting: '等待浏览器授权', recovering: '正在恢复', loading_catalog: '读取课程目录', video: '播放视频', solving: '准备答案', awaiting_verification: '等待网站验证', submitting: '提交测验', paused: '已暂停', complete: '已完成' };
 const statuses = { ready: '未开始', queued: '等待运行', starting: '正在连接', running: '运行中', pausing: '正在暂停', paused: '已暂停', stopping: '正在停止', stopped: '已停止', error: '需要处理', complete: '已完成' };
@@ -142,17 +143,8 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
 
   async function costs(id) {
     try {
-      const ledger = await readJSON(path.join(dataDir, 'ledger', `course-${id}.json`), { requests: [] });
-      if (!Array.isArray(ledger.requests)) throw new Error('账本结构异常');
-      let spent = 0, reserved = 0, unknown = false;
-      for (const entry of ledger.requests) {
-        const amount = entry.status === 'known' ? entry.cost_nanos : entry.reserved_nanos;
-        if (!Number.isSafeInteger(amount) || amount < 0) throw new Error('账本金额异常');
-        if (entry.status === 'known') spent += amount;
-        else { reserved += amount; if (entry.status === 'unknown') unknown = true; }
-      }
-      return { spent: spent / 1e9, reserved: reserved / 1e9, unknown };
-    } catch { return { spent: null, reserved: null, unknown: true }; }
+      return await readCourseCosts(path.join(dataDir, 'ledger'), id);
+    } catch { return { spent: null, reserved: null, unknown: true, unreadable: true, recoveryRequired: false }; }
   }
 
   async function state() {
@@ -174,7 +166,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
     validateCourseURL(course.url);
     course.status = 'starting'; course.error = ''; course.phase = 'connecting';
     await persist();
-    const child = launchController(process.execPath, [path.join(appDir, 'controller.mjs'), course.url, '--config', configFile, '--data-dir', dataDir, '--console'], { cwd: appDir, stdio: ['pipe', 'pipe', 'pipe', 'ipc'], windowsHide: true });
+    const child = launchController(process.execPath, [path.join(appDir, 'controller.mjs'), course.url, '--config', configFile, '--data-dir', dataDir, '--console', '--resume-billing'], { cwd: appDir, stdio: ['pipe', 'pipe', 'pipe', 'ipc'], windowsHide: true });
     const current = { id: course.id, child, stopped: false };
     active.set(course.id, current);
     let pendingLine = '';
@@ -429,7 +421,7 @@ export async function createConsole({ appDir, dataDir, spawnController, browserO
           if (exportingDiagnostics) { json(response, 429, { error: '诊断包正在生成，请稍后重试。' }); return; }
           exportingDiagnostics = true;
           try {
-            const zip = await diagnosticZip({ appDir, dataDir, courses: structuredClone(courses), logs: structuredClone(logs), browser: browserSession.state(), environment: { ...environment }, config: { ...config }, secrets: [token, csrf] });
+            const zip = await diagnosticZip({ appDir, dataDir, courses: structuredClone(courses), logs: structuredClone(logs), browser: browserSession.state(), environment: { ...environment }, config: { ...config }, connection: { ...connection }, secrets: [token, csrf] });
             response.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Disposition': `attachment; filename="ShenYiShua-diagnostics-${new Date().toISOString().replace(/[:.]/g,'-')}.zip"` }); response.end(zip);
           } finally { exportingDiagnostics = false; }
           return;

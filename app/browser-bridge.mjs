@@ -26,15 +26,25 @@ export async function clickVerificationControl(page, frame, beforeClick) {
   // UOOC's desktop sidebar leaves the quiz clipped in a narrow browser viewport.
   if (viewport.width < 1000) await page.setViewportSize({ width: 1280, height: Math.max(900, viewport.height) });
   const checkbox = frame.locator(verificationSelector);
-  await checkbox.scrollIntoViewIfNeeded({ timeout: 5000 });
+  // The native icon can keep animating; scrolling must not wait for layout stability.
+  await checkbox.evaluate(node => node.scrollIntoView({ block: 'center', inline: 'center', behavior: 'instant' }));
   const visible = await checkbox.evaluate(node => {
     const r = node.getBoundingClientRect();
-    const x = r.x + r.width / 2, y = r.y + r.height / 2;
-    const hit = document.elementFromPoint(x, y);
-    return r.width > 0 && r.height > 0 && x >= 0 && y >= 0 && x < innerWidth && y < innerHeight && (hit === node || node.contains(hit));
+    if (r.width <= 0 || r.height <= 0) return false;
+    let x = r.x + r.width / 2, y = r.y + r.height / 2, target = node, view = window;
+    while (true) {
+      const hit = view.document.elementFromPoint(x, y);
+      if (!hit || !(hit === target || target.contains(hit))) return false;
+      if (view === view.top) return true;
+      const iframe = view.frameElement;
+      if (!iframe) return false;
+      const box = iframe.getBoundingClientRect();
+      x = box.x + (x + iframe.clientLeft) * box.width / iframe.offsetWidth;
+      y = box.y + (y + iframe.clientTop) * box.height / iframe.offsetHeight;
+      target = iframe; view = view.parent;
+    }
   });
   if (!visible) throw new Error('验证控件被裁剪或遮挡，未发送点击');
-  await checkbox.click({ trial: true, timeout: 5000 });
   // Like drissionpage-ai's adapter, use viewport coordinates for native input.
   // Playwright boundingBox already includes iframe offsets; do not add them again.
   const box = await checkbox.boundingBox();

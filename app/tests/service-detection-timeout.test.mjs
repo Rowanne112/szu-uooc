@@ -49,7 +49,7 @@ test('detection accepts a response arriving after 30 seconds within a 120-second
   assert.equal(paidCalls, 1, 'waiting must not dispatch a duplicate paid request');
   assert.equal(result.testCosts.unknown, false);
   assert.ok(result.testCosts.estimated_usd > 0 && result.testCosts.estimated_usd <= .02);
-  const files = await fs.readdir(path.join(dataDir, 'detection-ledger'));
+  const files = (await fs.readdir(path.join(dataDir, 'detection-ledger'))).filter(file => /^course-\d+\.json$/.test(file));
   const ledger = JSON.parse(await fs.readFile(path.join(dataDir, 'detection-ledger', files[0]), 'utf8'));
   assert.equal(ledger.requests.length, 1);
   assert.equal(ledger.requests[0].status, 'known');
