@@ -9,7 +9,7 @@ let browser;
 before(async () => { browser = await chromium.launch({ headless: true, ...(chrome ? { executablePath: chrome } : {}) }); });
 after(async () => { await browser?.close(); });
 
-for (const mode of ['paragraphs', 'blocks', 'multiple', 'judgement', 'numeric-key', 'string-options', 'reordered-model', 'duplicate-text', 'missing-value', 'missing-key', 'duplicate-key', 'wrong-key', 'duplicate-control-value', 'unsynced-model']) test('native option mapping: ' + mode, async t => {
+for (const mode of ['paragraphs', 'blocks', 'multiple', 'judgement', 'numeric-key', 'string-options', 'reordered-model', 'quoted-code', 'quoted-line-continuation', 'quoted-nbsp', 'multiline-bank', 'multiline-div-bank', 'duplicate-text', 'missing-value', 'missing-key', 'duplicate-key', 'wrong-key', 'duplicate-control-value', 'unsynced-model']) test('native option mapping: ' + mode, async t => {
   const page = await browser.newPage();
   t.after(() => page.close());
   await page.route('**/*', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><meta charset="utf-8">' }));
@@ -21,7 +21,10 @@ for (const mode of ['paragraphs', 'blocks', 'multiple', 'judgement', 'numeric-ke
     const route = { params: { courseId: '123', chapterId: '1', sectionId: '2', sourceId: '900' } };
     const injector = { get: name => ({ $rootScope: root, courseService: service, $state: route })[name] };
     const question = { type: '10', options: [{ key: 'native-correct', keyText: 'C', text: '<p>First line</p><p>Second line</p>' }, { key: 'native-wrong', keyText: 'A', text: 'Other option' }], student_answer: ['native-wrong'], checked: true };
-    if (mode === 'blocks') question.options[0].text = '<div>First line</div><div>Second line</div>';
+    if (mode === 'blocks' || mode === 'multiline-div-bank') question.options[0].text = '<div>First line</div><div>Second line</div>';
+    if (mode === 'quoted-code') { question.options[0].text = 'printf("a  b");'; question.options[1].text = 'printf("a b");'; }
+    if (mode === 'quoted-line-continuation') { question.options[0].text = 'printf("a\\\n  b");'; question.options[1].text = 'printf("a\\\nb");'; }
+    if (mode === 'quoted-nbsp') { question.options[0].text = 'printf("a\u00a0b");'; question.options[1].text = 'printf("a b");'; }
     if (mode === 'multiple') { question.type = '11'; question.options.push({ key: 'native-third', keyText: 'B', text: '<ul><li>Third</li><li>option</li></ul>' }); }
     if (mode === 'judgement') question.type = '20';
     if (mode === 'numeric-key') question.options[0].key = 0;
@@ -57,7 +60,8 @@ for (const mode of ['paragraphs', 'blocks', 'multiple', 'judgement', 'numeric-ke
     document.body.appendChild(group);
     window.angular = { element: node => ({ injector: () => injector, scope: () => node.__scope }) };
     localStorage.setItem('szu-uooc:auto-player:config', JSON.stringify({ aiBaseUrl: 'https://fixture.invalid/v1', aiModel: 'fixture-model', aiInputPrice: 0, aiCachedInputPrice: 0, aiOutputPrice: 0, aiBudget: 1 }));
-    window.GM_getValue = (key, fallback) => key === 'szu-uooc:ai-api-key' ? 'fixture-private-key' : fallback;
+    const bank = { questions: [{ question: 'Choose the first option', type: '单选题', options: [{ text: 'First line\nSecond line' }, { text: 'Other option' }], answers: ['First line\nSecond line'] }] };
+    window.GM_getValue = (key, fallback) => key === 'szu-uooc:answer-bank' && mode.startsWith('multiline-') ? JSON.stringify(bank) : key === 'szu-uooc:ai-api-key' ? 'fixture-private-key' : fallback;
     window.GM_setValue = () => {};
     let aiCalls = 0;
     window.GM_xmlhttpRequest = details => {
@@ -72,7 +76,7 @@ for (const mode of ['paragraphs', 'blocks', 'multiple', 'judgement', 'numeric-ke
   const state = JSON.parse(await page.locator('#szu-uooc-course-state').textContent());
   const invalid = ['duplicate-text', 'missing-value', 'missing-key', 'duplicate-key', 'wrong-key', 'duplicate-control-value', 'unsynced-model'].includes(mode);
   assert.equal(state.phase, invalid ? 'paused' : 'awaiting_verification', state.error);
-  assert.equal(await page.evaluate(() => window.__fixture.aiCalls), 1);
+  assert.equal(await page.evaluate(() => window.__fixture.aiCalls), mode.startsWith('multiline-') ? 0 : 1);
   assert.equal(await page.evaluate(() => window.__fixture.vmScope.vm.commitCalls), invalid ? 0 : 1);
   assert.equal(await page.evaluate(() => window.__fixture.vmScope.vm.finalClicks), 0);
   if (invalid) {
@@ -88,7 +92,7 @@ for (const mode of ['paragraphs', 'blocks', 'multiple', 'judgement', 'numeric-ke
     await page.waitForFunction(runId => { const current = JSON.parse(document.querySelector('#szu-uooc-course-state').textContent); return current.runId !== runId && ['paused', 'awaiting_verification'].includes(current.phase); }, stopped.runId, { timeout: 5000 });
     const resumed = JSON.parse(await page.locator('#szu-uooc-course-state').textContent());
     assert.equal(resumed.phase, 'awaiting_verification', 'cached resume: ' + resumed.error);
-    assert.equal(await page.evaluate(() => window.__fixture.aiCalls), 1, 'resume must reuse cached answers');
+    assert.equal(await page.evaluate(() => window.__fixture.aiCalls), mode.startsWith('multiline-') ? 0 : 1, 'resume must reuse bank or cached answers');
     await page.locator('[data-action="course-stop"]').click();
   }
 });

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.34
+// @version      0.10.0-local.36
 // @description  个人编程学习与技术探索项目，仅供学习交流与经授权的安全研究；UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
@@ -50,7 +50,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.34';
+  const SCRIPT_VERSION = '0.10.0-local.36';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -1156,6 +1156,7 @@
       node.replaceWith(ownerDocument.createTextNode('[' + label + ']'));
     });
     clone.querySelectorAll('br').forEach((node) => node.replaceWith(ownerDocument.createTextNode('\n')));
+    clone.querySelectorAll('p,div,li').forEach((node) => { node.prepend('\n'); node.append('\n'); });
     clone.querySelectorAll('img').forEach((image, index) => {
       if (images) {
         const original = originalImages[index];
@@ -1170,12 +1171,7 @@
         image.replaceWith(ownerDocument.createTextNode('[图片: ' + label + ']'));
       }
     });
-    return (clone.textContent || '')
-      .replace(/\u00a0/g, ' ')
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n[ \t]+/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    return (clone.textContent || '').trim();
   }
 
   function escapeMarkdown(text) {
@@ -3781,7 +3777,10 @@
     if (node.textContent !== value) { node.textContent = value; refreshControls(); }
   }
 
-  function normalizedAnswerText(value) { return String(value || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim(); }
+  function normalizedAnswerText(value) {
+    // Whitespace inside code literals can change the correct answer.
+    return String(value || '').replace(/"(?:\\[\s\S]|[^"\\])*"|(?<![A-Za-z0-9_])(?:u8|[LuU])?'(?:\\[\s\S]|[^'\\])*'|\s+/g, part => /^\s/.test(part) ? ' ' : part).trim();
+  }
   function fillAnswerText(value) { return String(value ?? '').replace(/\r\n?/g, '\n'); }
 
   function canonicalQuestionType(value) {
@@ -3814,7 +3813,9 @@
 
   function courseCacheKey(courseId, q) {
     const images = [...(q.images || []), ...(q.options || []).flatMap(o => o.images || [])].map(i => [i.label, i.url]);
-    return COURSE_CACHE_KEY + courseId + ':' + JSON.stringify([normalizedAnswerText(q.question), String(q.type), (q.options || []).map((o) => normalizedAnswerText(o.text)).sort(), Number(q.blankCount) || 0, ...(images.length ? [images] : [])]);
+    const texts = [q.question, ...(q.options || []).map(o => o.text)];
+    // Old quoted keys already lost literal whitespace; retain records without reusing them.
+    return COURSE_CACHE_KEY + courseId + ':' + JSON.stringify([normalizedAnswerText(q.question), String(q.type), (q.options || []).map((o) => normalizedAnswerText(o.text)).sort(), Number(q.blankCount) || 0, ...(texts.some(text => /["']/.test(text)) ? ['quoted-whitespace-v2'] : []), ...(images.length ? [images] : [])]);
   }
 
   function bankAnswer(courseId, q) {
@@ -3823,7 +3824,9 @@
     let bank;
     try { bank = JSON.parse(state.config.answerBank || (typeof GM_getValue === 'function' && GM_getValue('szu-uooc:answer-bank', '')) || '{"questions":[]}'); } catch (_) { throw new Error('答案库JSON格式错误'); }
     if (!bank || !Array.isArray(bank.questions)) throw new Error('请在AI设置的题库框导入正确答案JSON');
-    const exact = bank.questions.filter((item) => normalizedAnswerText(item.question) === normalizedAnswerText(q.question) && canonicalQuestionType(item.type) === canonicalQuestionType(q.type) && JSON.stringify((item.options || []).map((o) => normalizedAnswerText(o.text)).sort()) === JSON.stringify((q.options || []).map((o) => normalizedAnswerText(o.text)).sort()));
+    // shortcut: marked runs are only blanks; use per-blank ranges if future code literals contain underscore runs.
+    const questionText = (value, item) => item.ocr_blank_length_uncertain === true ? normalizedAnswerText(value).replace(/(?<![A-Za-z0-9_])_{2,}(?![A-Za-z0-9_])/g, '____') : normalizedAnswerText(value);
+    const exact = bank.questions.filter((item) => questionText(item.question, item) === questionText(q.question, item) && canonicalQuestionType(item.type) === canonicalQuestionType(q.type) && JSON.stringify((item.options || []).map((o) => normalizedAnswerText(o.text)).sort()) === JSON.stringify((q.options || []).map((o) => normalizedAnswerText(o.text)).sort()));
     const uniqueAnswers = new Map(exact.filter((item) => Array.isArray(item.answers) && item.answers.length).map((item) => {
       const answers = item.answers.map(canonicalQuestionType(q.type) === 'fill' ? fillAnswerText : normalizedAnswerText);
       return [JSON.stringify(canonicalQuestionType(q.type) === 'fill' ? answers : answers.sort()), item];

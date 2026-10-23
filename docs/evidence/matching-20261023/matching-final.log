@@ -1,0 +1,31 @@
+✔ scanned questions vary only marked blank lengths and retain exact answer safeguards (2.678375ms)
+✔ normalization preserves code literals and still collapses surrounding layout whitespace (1.248958ms)
+✔ bank and cache keys separate literal whitespace without reusing lossy legacy keys (1.040125ms)
+✔ choice validation distinguishes quoted spaces and permits both distinct literal options (0.512084ms)
+✔ native option mapping: paragraphs (1500.425958ms)
+✔ native option mapping: blocks (662.314292ms)
+✔ native option mapping: multiple (604.01175ms)
+✔ native option mapping: judgement (648.395042ms)
+✔ native option mapping: numeric-key (619.285083ms)
+✔ native option mapping: string-options (641.82425ms)
+✔ native option mapping: reordered-model (624.6075ms)
+✔ native option mapping: quoted-code (606.66175ms)
+✔ native option mapping: quoted-line-continuation (629.024333ms)
+✔ native option mapping: quoted-nbsp (625.54525ms)
+✔ native option mapping: multiline-bank (589.512541ms)
+✔ native option mapping: multiline-div-bank (599.137042ms)
+✔ native option mapping: duplicate-text (297.995ms)
+✔ native option mapping: missing-value (265.957041ms)
+✔ native option mapping: missing-key (248.084792ms)
+✔ native option mapping: duplicate-key (272.459833ms)
+✔ native option mapping: wrong-key (268.246084ms)
+✔ native option mapping: duplicate-control-value (265.549166ms)
+✔ native option mapping: unsynced-model (245.596708ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10437.442166

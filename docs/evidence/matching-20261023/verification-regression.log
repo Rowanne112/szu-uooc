@@ -1,0 +1,54 @@
+✔ free mode fills missing choice answers without a Key, reuses them on verification retry and never caches random answers (12754.183041ms)
+✔ free mode keeps known answers and leaves missing fill answers for a human (5368.351583ms)
+✔ free mode maps 11 random 0.1 to native option ids without an empty answer (4632.437041ms)
+✔ free mode maps 11 random 0.99 to native option ids without an empty answer (4634.622791ms)
+✔ free mode maps 20 random 0.1 to native option ids without an empty answer (4615.159417ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可核对账单后点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (6833.750583ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (16646.017042ms)
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (12684.450584ms)
+✔ verification retry waits for delayed native close before reusing the same dialog (12716.464333ms)
+✔ pause during native dialog closing cancels its scheduled reopen (5003.418334ms)
+✔ stop during native dialog closing cancels its scheduled reopen (4883.40375ms)
+✔ a native dialog that never closes pauses after the bounded wait without reopening (8630.812541ms)
+✔ repeated verification failures wait the full backoff and pause after three reopen attempts (11566.155167ms)
+✔ human verification during a pending retry submits once without reopening (4635.189458ms)
+✔ verification retry restores answers after the same quiz iframe and its answer model are replaced (8680.884209ms)
+✔ human verification during retry answer synchronization keeps its new scope result (4600.529708ms)
+✔ pause cancels a scheduled verification retry (4184.627542ms)
+✔ stop cancels a scheduled verification retry (4082.57625ms)
+✔ changed questions cannot reopen verification using an earlier answer (4699.773334ms)
+✔ a transient native click error keeps the controller connected and retries after five seconds (10683.411083ms)
+✔ a delayed click from an older verification attempt cannot click a reopened widget (7700.274708ms)
+✔ the same quiz iframe can be replaced while waiting for AI and receives its answers without another request (4670.547833ms)
+✔ replacing a quiz with different question text while AI is pending cannot apply or submit the earlier answer (2564.262375ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (2678.761916ms)
+✔ a human verification callback that replaces the page model continues the same task without restart (6868.543666ms)
+✔ a native verification callback can retain the course source id instead of the exam id (4688.483208ms)
+✔ a fast human submit waits for delayed platform completion after verification state is cleared (12630.4925ms)
+✔ a fast human submit after quiz iframe replacement waits for platform completion without reopening (16654.373333ms)
+✔ explicitly cancelling native verification still pauses without submitting (6728.571333ms)
+✔ briefly hidden native verification can return after the dialog has been open for three seconds (12681.805458ms)
+✔ a verification callback from another task cannot submit the current quiz (4669.8375ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (2651.435375ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (2735.475625ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (6721.431ms)
+✔ a second copy of the course script cannot overwrite a live runner with idle state (5197.634917ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (2685.653542ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (4883.311125ms)
+✔ an original course tab can finish its login redirect before the controller validates its URL (3073.155334ms)
+✔ three videos naturally end in sequence and the following chapter quiz completes without external clicks (8735.810709ms)
+✔ native verification scroll timeouts keep retrying past three attempts and finish the next video (42932.07ms)
+✔ pause cancels native verification input retries during backoff (9140.437542ms)
+✔ stop cancels native verification input retries during backoff (8890.433333ms)
+✔ manual console start preserves historical streamed and pre-header reservations while completing the course (6725.480917ms)
+API 结果或费用未知；保留预留额度，课程暂停，可核对账单后点击继续在剩余预算内重试
+✔ a new pre-header disconnect stays paused until manual console resume and then completes the course (18716.689958ms)
+ℹ tests 44
+ℹ suites 0
+ℹ pass 44
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 358338.641417

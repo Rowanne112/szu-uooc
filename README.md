@@ -184,3 +184,7 @@ Windows / Mac 新手版。
 ## 来源与许可
 
 随附原项目的 [第三方许可](app/THIRD-PARTY-LICENSE.txt)，保留原作者 Liunian06 的 MIT 版权声明。
+
+## v0.1.23 题库匹配修复
+
+修复代码字符串空格误匹配、多行选项导入丢失；保留精确匹配与现有缓存策略。脚本版本0.10.0-local.36，题库1,349题，保留v0.1.22熄屏续播修复。详见[验收记录](docs/ANSWER_MATCHING_VALIDATION.md)。
