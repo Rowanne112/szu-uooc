@@ -1,0 +1,24 @@
+Raw Chrome/noDefaults: background timers advance, real MP4 naturally ends, explicit pause survives, cleanup releases focus. No course platform or provider requests.
+✔ the original browser course bridge keeps background timers and native video alive, then restores visibility on cleanup (4105.161459ms)
+✔ native option mapping: paragraphs (1059.894958ms)
+✔ native option mapping: blocks (603.321042ms)
+✔ native option mapping: multiple (592.319375ms)
+✔ native option mapping: judgement (604.304958ms)
+✔ native option mapping: numeric-key (606.739459ms)
+✔ native option mapping: string-options (614.230709ms)
+✔ native option mapping: reordered-model (613.256584ms)
+✔ native option mapping: duplicate-text (268.268333ms)
+✔ native option mapping: missing-value (224.719875ms)
+✔ native option mapping: missing-key (233.367958ms)
+✔ native option mapping: duplicate-key (232.132ms)
+✔ native option mapping: wrong-key (246.962ms)
+✔ native option mapping: duplicate-control-value (234.924875ms)
+✔ native option mapping: unsynced-model (253.560333ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 15
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6583.366292

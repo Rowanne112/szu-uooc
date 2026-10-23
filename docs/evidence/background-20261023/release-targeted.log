@@ -1,0 +1,14 @@
+✔ queued paid requests cannot survive a new run or a document reload with the same runId (1385.305083ms)
+✔ a delayed image is rejected after resuming the same task in a new run (409.586917ms)
+真实控制器 IPC：视频暂停、继续、停止保留 Chrome、连接期间失去父控制台不会启动任务。课程全部模拟，无解题 API 请求。
+✔ real controller IPC pauses playback, resumes, stops cleanly and cannot start after parent disconnects during connection (6152.512208ms)
+Raw Chrome/noDefaults: background timers advance, real MP4 naturally ends, explicit pause survives, cleanup releases focus. No course platform or provider requests.
+✔ the original browser course bridge keeps background timers and native video alive, then restores visibility on cleanup (3853.7375ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6302.239542

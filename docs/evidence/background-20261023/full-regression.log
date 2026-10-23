@@ -1,0 +1,499 @@
+✔ tests/api-auth-recovery.test.mjs (45.702708ms)
+✔ manual resume after HTTP 200 then a connection failure survives a controller restart and preserves both reservations (17.871334ms)
+✔ manual connection recovery keeps the reserved charge in the budget (3.382541ms)
+✔ an old unknown request without HTTP or failure metadata can be manually resumed without rewriting its reservation (2.8385ms)
+✔ each new connection failure requires another explicit resume and never triggers automatic retries (3.999542ms)
+✔ manual connection recovery still rejects invalid reservations and metering overflow (4.674708ms)
+✔ tests/api-images.test.mjs (40.985834ms)
+✔ financial state and snapshot recovery permission remain independent in the shared summary (1.422208ms)
+✔ the shared ledger rejects malformed identities, financial states, totals and recovery references (0.330334ms)
+✔ readCourseCosts distinguishes a missing ledger from a corrupt financial record (3.268709ms)
+✔ switching models preserves legacy entries and records the new model and prices per request (15.860208ms)
+✔ switching models still counts old known costs and reservations against the same course budget (1.245625ms)
+✔ switching models cannot bypass an unresolved HTTP 502 charge (1.31775ms)
+✔ tests/api-protocol.test.mjs (26.20675ms)
+✔ a managed rate-limited task waits and recovers within budget while retaining the unknown reservation (17.821125ms)
+✔ persistent managed rate limits stop after three attempts without erasing reservations (6.852667ms)
+✔ cancelling after a rate-limited attempt sends nothing else and cannot claim the call was never sent (1.9585ms)
+✔ quota errors and long Retry-After responses cannot create an automatic retry loop (2.703375ms)
+✔ a retry rechecks the remaining budget before sending another request (2.876417ms)
+✔ Retry-After is respected and cancellation during that wait prevents another paid request (1002.951208ms)
+✔ a managed HTTP 200 stream timeout recovers without pausing or erasing its unknown charge (5.156875ms)
+✔ persistent stream interruptions exhaust two retries and do not grant another recovery cycle (4.123042ms)
+✔ pausing during stream recovery backoff prevents another paid dispatch (1.269541ms)
+✔ stream recovery rechecks its budget and never retries malformed or unmetered responses (3.969583ms)
+✔ unmanaged stream timeouts stay blocked while a live managed network interruption can recover (2.822083ms)
+✔ an earlier rate limit does not skip the first ten-second stream recovery delay (3.64025ms)
+API transport self-check passed: pricing, usage/cache, budget, model, credential isolation, SSE, unknown charge, concurrency. No network requests.
+✔ tests/api-request.test.mjs (116.611667ms)
+✔ explicit resume retains the complete old 502 reservation and records its recovery on the new request (16.728917ms)
+✔ a new 502 cannot be retried until a new explicit resume and cannot trigger the managed retry loop (4.696792ms)
+✔ an old HTTP 200 without usage can be explicitly resumed without erasing or zeroing its reserved charge (2.884459ms)
+✔ explicit resume cannot bypass the shared budget, invalid amounts or metering overflow (4.96175ms)
+✔ explicit resume recognizes an interrupted pending request and every terminal HTTP failure without erasing reservations (8.754917ms)
+✔ a metered incomplete result keeps its known cost and exports its failure stage (7.906084ms)
+✔ failed terminal events and metered provider errors cannot become successful answers (15.873625ms)
+✔ a managed stream ending without a final response recovers and preserves the unknown reservation (4.447459ms)
+✔ persistent early EOF is bounded and cancellation or insufficient budget prevents another dispatch (5.001375ms)
+✔ unmanaged EOF, invalid frames, non-stream responses and missing usage never auto-retry (9.603583ms)
+✔ SSE event names identify final responses and incomplete final frames are never accepted (0.317125ms)
+✔ real HTTP clean EOF recovers and a final event after an SSE id settles before the connection closes (21.925042ms)
+✔ CRLF split between transport chunks cannot turn a partial event into a completed frame (1.90925ms)
+✔ real fetch SSE deadlines recover with reservations and normalize only the owned timeout AbortError (338.763916ms)
+✔ an unrelated abort after HTTP 200 remains unknown and cannot auto-retry (15.268ms)
+✔ a real broken response stream recovers but a failure before headers remains blocked (21.1175ms)
+✔ rate limits use exponential waits and report exhaustion without losing reservations (5.05575ms)
+✔ HTTP-date Retry-After is respected and invalid or long waits require human recovery (7.752ms)
+✔ a throwing recovery logger cannot change a paid request outcome (2.368667ms)
+✔ cancelling during ledger mkdir prevents dispatch and releases only the unsent reservation (0.809708ms)
+✔ cancelling during ledger readFile prevents dispatch and releases only the unsent reservation (1.340667ms)
+✔ cancelling during ledger rename prevents dispatch and releases only the unsent reservation (1.180666ms)
+✔ cancelling an unsent retry keeps the earlier paid attempt unknown and cannot claim the operation was never sent (2.705417ms)
+✔ official Ark models without a pricing extension pass detection and answer through the course API (18.117375ms)
+✔ Ark without /models tries bounded official candidates and skips unopened models without changing protocol (11.42575ms)
+✔ only the official Ark base inherits known prices and defaults to /api/v3 (0.162791ms)
+✔ Ark lists returning auth, billing or network errors never trigger paid fallback calls (3.886917ms)
+✔ course errors retain Ark billing and usage-limit guidance and keep unknown cost reservations (2.217666ms)
+✔ a restarted console reports pending and unknown costs consistently and only user actions authorize billing recovery (56.869875ms)
+✔ cost recovery shows Continue and retained costs after restart without routing the user into repeated service detection (1892.7295ms)
+✔ real controller resume with historical unknown reservation (5486.858208ms)
+✔ real controller resume with historical pending reservation (4684.365167ms)
+✔ real controller explicit-start with historical pending reservation (4681.17975ms)
+上次请求费用未知，须核对服务商账单后再继续；不要删除账本或反复重试。
+✔ real controller none with historical unknown reservation (2645.82375ms)
+✔ verified zero token prices still dispatch and preserve a conservative reservation when a response is lost (15.441916ms)
+✔ diagnostic replay: explicit resume after a pre-header TypeError survives a controller restart and retains the charge (3.448541ms)
+✔ a real process exit after dispatch leaves a reservation that explicit restart resume can recover without deleting it (29.420875ms)
+✔ a recovery approval survives another process restart and covers only the confirmed historical requests (3.652625ms)
+✔ an explicit resume from another controller waits for the shared course request before approving recovery (104.728792ms)
+✔ an active paid request in another process cannot be approved as an orphaned pending request (28.767417ms)
+✔ queued paid requests cannot survive a new run or a document reload with the same runId (961.035375ms)
+✔ a delayed image is rejected after resuming the same task in a new run (403.012ms)
+Browser bridge self-check passed: private Key, streaming transport, origin/frame/course guards. All requests mocked.
+✔ tests/browser-bridge.test.mjs (1888.541416ms)
+✔ Edge discovery reads the selected browser profiles on Mac and Windows (5.087042ms)
+✔ discovery rejects unknown browser kinds and reports a missing Edge without using Chrome (0.3235ms)
+✔ the real browser selector changes a previously used offline Edge to Chrome after manual verification (1044.49475ms)
+✔ an unconnected browser selection can be changed back after restart without connecting it (46.619542ms)
+✔ a damaged signup configuration pauses signup without preventing the console from opening (4.976125ms)
+✔ reselection still checks submissions in a connected browser before course refresh (10.327166ms)
+✔ an offline previously used browser can be changed after explicit submission confirmation (11.34275ms)
+✔ removing the final course and restarting cannot bypass unresolved submission checks (11.80275ms)
+✔ browser selection waits for worker exit, preserves shared costs and survives restart (27.064916ms)
+✔ switching checks stored submissions from a closed course origin and preserves existing tabs (546.557292ms)
+✔ browser switching refuses unresolved submissions and disconnect resets catalog and connection (0.3325ms)
+✔ a delayed disconnect from the previous Chrome connection cannot discard its replacement (0.101709ms)
+✔ debug setup refuses an unsupported Chrome internal URL launch instead of reporting success (0.360583ms)
+✔ course startup reuses the original browser and stops without closing its user tabs (5.580709ms)
+✔ actual Chrome command opens all URLs in the specified existing profile; signup pages stay inactive through navigation (1173.031792ms)
+✔ user can configure signup, add courses, switch schedule and reopen from the real console UI without a Key (1607.582583ms)
+✔ macOS validates and actually launches the per-user job, then removes its startup file (82.066416ms)
+✔ Mac course focus uses the owned Chrome PID, rejects unsafe identifiers and reports activation failure (1.518041ms)
+✔ startup opens the entire selected list once, survives restarts and only supplements new targets (28.921833ms)
+✔ same-account browser changes keep daily checkin results and require a newly tested profile (3.806292ms)
+✔ legacy profile-based history preserves opened, uncertain and failed results when switching browsers (3.530208ms)
+✔ offline and partial command failures retry after five minutes without reopening accepted pages (3.493208ms)
+✔ scheduled mode waits for Beijing time, catches up after sleep, and does not reset a completed day (2.541125ms)
+✔ manual reopen is explicit; interrupted or corrupt records never silently repeat a day (5.349083ms)
+✔ setup requires script acknowledgement and a known Chrome profile, with no provider credentials (2.138209ms)
+✔ Chrome opens one batch with the chosen profile and literal URL arguments; errors affect only that batch (0.420792ms)
+✔ per-user startup files preserve spaces and quote characters, can be disabled, and do not keep restarting after exit (3.95925ms)
+✔ console saves course selection and serves protected signup settings without an API Key or controller (60.608666ms)
+✔ the original Chrome connector refuses remote or credential-bearing endpoints (0.499459ms)
+✔ an early closed socket rejects without waiting for the connection timeout (5.834167ms)
+✔ original Chrome connects despite a frozen unrelated renderer and retains user tabs (562.368417ms)
+✔ original Chrome connects despite a frozen blank tab and retains user tabs (574.392667ms)
+✔ original Chrome connects despite a frozen blank tab before opening a course and retains user tabs (519.628666ms)
+✔ clicking the console course link in connected Chrome opens the course instead of a frozen blank tab (593.785583ms)
+✔ tests/console-detection.test.mjs (79.436791ms)
+✔ concise recovery actions distinguish billing and model errors from invalid keys (0.904792ms)
+✔ the console keeps essential costs visible and every dialog action reachable at desktop, tablet and phone sizes (7507.689791ms)
+✔ manual recovery guidance preserves checkpoints and identifies exhausted retries (0.448459ms)
+✔ a temporary checkpoint write failure does not poison subsequent saves (33.00475ms)
+✔ recovery reasons survive console restart with credentials removed and bounded history (42.766917ms)
+✔ upgrading a legacy AI configuration keeps its mode and connection test result (34.38875ms)
+✔ free mode can be saved and start a course without a Key or any provider request (31.379625ms)
+✔ console protects credentials, validates inputs, controls a course, runs one course at a time with confirmed completions and preserves costs (85.644792ms)
+✔ dependency download failure is visible and retry repairs it; restart keeps progress without auto-running (13.311417ms)
+✔ restart reuses the previous local console origin so existing tabs can reconnect (3.533917ms)
+✔ an occupied saved console port falls back safely without taking over its listener (3.122416ms)
+真实控制器 + 模拟网站验收通过：新手引导、读取两课、隐藏 Key、一次一门整课、第二门拦截、暂停继续与停止换课、复用原浏览器和已有课程页、页面挂起仍可停止、视频页自动切下一节并目录确认整课完成、完成后启动下一课、去重、手机无溢出及无 JS 错误。无真实平台写入及付费请求。
+✔ tests/console-ui.test.mjs (23426.499167ms)
+真实控制器 IPC：视频暂停、继续、停止保留 Chrome、连接期间失去父控制台不会启动任务。课程全部模拟，无解题 API 请求。
+✔ real controller IPC pauses playback, resumes, stops cleanly and cannot start after parent disconnects during connection (5844.5385ms)
+✔ a missing state channel recovers with a bounded reload and resumes the saved course (687.530125ms)
+✔ a invalid state channel recovers with a bounded reload and resumes the saved course (712.322417ms)
+✔ a persistent missing state channel exhausts a finite backoff budget and safely pauses (1333.290917ms)
+✔ user pause cancels recovery while the DOM state is unavailable and survives a reload (900.666166ms)
+✔ a pending submission blocks automatic page replay and reports a manual pause (689.375125ms)
+✔ a brief missing snapshot returns without a reload or manual pause (690.780375ms)
+✔ a transient observational hook failure is logged without terminating the active course (481.139292ms)
+✔ a checkpoint with an unconfirmed submission blocks recovery even before the first readable snapshot (737.712375ms)
+✔ a malformed checkpoint stops the managed document without restarting a runner (613.827292ms)
+✔ fresh heartbeats do not create progress logs or duplicate state events (740.945458ms)
+✔ a dead script heartbeat recovers but an active bounded retry retains ownership (826.999167ms)
+✔ a duplicate controller for the same saved course is rejected before browser operations and releases the lock after stop (634.440125ms)
+✔ an initial page load timeout keeps monitoring and starts when the DOM becomes usable (497.546916ms)
+✔ a recovery navigation timeout can still observe a successfully restored script (671.95875ms)
+✔ stop interrupts page recovery backoff and retains the original browser tab (999.623083ms)
+✔ pause still stops the real runner when the stop button is removed (633.011458ms)
+✔ losing both stop interfaces terminates the old document without discarding a pending submission and can resume manually (646.597333ms)
+✔ stop destroys an uncontrolled active document when both ordinary stop interfaces are lost (605.800083ms)
+✔ stop also terminates a runner whose stop API, button and DOM state have all disappeared (505.392875ms)
+✔ a stop evaluate that never answers reaches its host deadline and terminates the old document (3539.599875ms)
+✔ task-level recovery reasons, attempts and results reach persistent console logging once per change (704.40425ms)
+✔ emergency pause never overwrites a checkpoint acquired by another course tab (567.576833ms)
+✔ a pause whose checkpoint write fails cannot restart after storage recovers and the user reloads (2668.251541ms)
+✔ free mode fills missing choice answers without a Key, reuses them on verification retry and never caches random answers (12740.447ms)
+✔ free mode keeps known answers and leaves missing fill answers for a human (7247.927083ms)
+✔ free mode maps 11 random 0.1 to native option ids without an empty answer (4651.588709ms)
+✔ free mode maps 11 random 0.99 to native option ids without an empty answer (4632.837291ms)
+✔ free mode maps 20 random 0.1 to native option ids without an empty answer (4673.070542ms)
+API HTTP 502；未识别；需查看服务商诊断；结果或费用未知；保留预留额度，课程暂停，可核对账单后点击继续在剩余预算内重试
+✔ manual console start and resume recover reserved 502s, while a new 502 still pauses before another paid attempt (6674.185459ms)
+✔ managed controller automatically recovers a streamed answer timeout and completes the quiz and next video without resume (16671.914375ms)
+✔ managed controller retries failed native verification without resume or another paid answer and continues the course (12684.566917ms)
+✔ verification retry waits for delayed native close before reusing the same dialog (13534.787542ms)
+✔ pause during native dialog closing cancels its scheduled reopen (5092.10575ms)
+✔ stop during native dialog closing cancels its scheduled reopen (4954.042167ms)
+✔ a native dialog that never closes pauses after the bounded wait without reopening (8578.409542ms)
+✔ repeated verification failures wait the full backoff and pause after three reopen attempts (11561.792458ms)
+✔ human verification during a pending retry submits once without reopening (4678.454792ms)
+✔ verification retry restores answers after the same quiz iframe and its answer model are replaced (8686.90375ms)
+✔ human verification during retry answer synchronization keeps its new scope result (4648.940166ms)
+✔ pause cancels a scheduled verification retry (4156.597125ms)
+✔ stop cancels a scheduled verification retry (4119.986ms)
+✔ changed questions cannot reopen verification using an earlier answer (4599.30725ms)
+✔ a transient native click error keeps the controller connected and retries after five seconds (10695.785708ms)
+✔ a delayed click from an older verification attempt cannot click a reopened widget (7721.307834ms)
+✔ the same quiz iframe can be replaced while waiting for AI and receives its answers without another request (4701.388459ms)
+✔ replacing a quiz with different question text while AI is pending cannot apply or submit the earlier answer (2625.859459ms)
+✔ stopping while a verification action is awaiting approval prevents its later click (2670.384792ms)
+✔ a human verification callback that replaces the page model continues the same task without restart (6618.833334ms)
+✔ a native verification callback can retain the course source id instead of the exam id (4659.462917ms)
+✔ a fast human submit waits for delayed platform completion after verification state is cleared (12621.883125ms)
+✔ a fast human submit after quiz iframe replacement waits for platform completion without reopening (14635.627542ms)
+✔ explicitly cancelling native verification still pauses without submitting (6600.467834ms)
+✔ briefly hidden native verification can return after the dialog has been open for three seconds (12745.4435ms)
+✔ a verification callback from another task cannot submit the current quiz (4714.339875ms)
+✔ stopping an original course tab cancels a pending observational hook without closing the tab (2802.503ms)
+✔ stop takes priority over a pending focus command and preserves the original course tab (2733.021958ms)
+✔ refreshing a paused original course keeps its error and progress instead of reporting idle as running (6669.046541ms)
+✔ a second copy of the course script cannot overwrite a live runner with idle state (5070.231125ms)
+✔ refreshing an active course still resumes its saved task without a new paid request (2655.065167ms)
+✔ stopping and restarting on the same original tab leaves only one managed script and binding (4829.163125ms)
+✔ an original course tab can finish its login redirect before the controller validates its URL (3037.87125ms)
+✔ three videos naturally end in sequence and the following chapter quiz completes without external clicks (8598.339ms)
+✔ native verification scroll timeouts keep retrying past three attempts and finish the next video (42820.537042ms)
+✔ pause cancels native verification input retries during backoff (9029.97675ms)
+✔ stop cancels native verification input retries during backoff (8856.398834ms)
+✔ manual console start preserves historical streamed and pre-header reservations while completing the course (6695.256958ms)
+API 结果或费用未知；保留预留额度，课程暂停，可核对账单后点击继续在剩余预算内重试
+✔ a new pre-header disconnect stays paused until manual console resume and then completes the course (18667.6605ms)
+✔ only one whole course runs at a time; a paused course must be stopped before switching (56.130792ms)
+✔ failed start can be retried for the same course (16.1265ms)
+选择题验收：序号映射、原文兼容、单选多选与填空混合、乱序字母及缓存；无效序号和歧义答案保留暂停保护，均不追加付费请求。
+图片验收：题干与图片选项实际发送、标签对应、原生答案键映射、读图失败和缺少识图模型时停止。全部使用自带测试图及模拟 AI。
+填空验收：题库、模拟 AI 和缓存保留多空顺序、重复答案及代码空白；保存值失真、题库冲突、空数不符和空答案均阻止提交。无真实平台或付费请求。
+✔ tests/course-controller.test.cjs (48702.8345ms)
+原生 MP4 真实播放验收：两段视频自然 ended 并目录确认、停滞切换当前任务的签名线路、无线路时暂停而不假完成、视频内单选/多选原生确认后续播、错误题目/缺少答案不提交。无真实平台或付费请求。
+✔ tests/course-media.test.cjs (20987.188667ms)
+✖ native option mapping: paragraphs (2.549125ms)
+✖ native option mapping: blocks (0.201125ms)
+✖ native option mapping: multiple (0.038792ms)
+✖ native option mapping: judgement (0.017708ms)
+✖ native option mapping: numeric-key (0.020833ms)
+✖ native option mapping: string-options (0.019458ms)
+✖ native option mapping: reordered-model (0.016125ms)
+✖ native option mapping: duplicate-text (0.035083ms)
+✖ native option mapping: missing-value (0.034458ms)
+✖ native option mapping: missing-key (0.0385ms)
+✖ native option mapping: duplicate-key (0.0215ms)
+✖ native option mapping: wrong-key (0.013875ms)
+✖ native option mapping: duplicate-control-value (0.011958ms)
+✖ native option mapping: unsynced-model (0.010667ms)
+课程恢复：网络断开/无响应与导航超时自动恢复，持续503有限退避，401安全暂停，媒体重载→原生重开→耗尽暂停，恢复预算跨刷新，播放断点不冒充完成，停止后迟到响应不污染新任务。无真实平台或付费请求。
+✔ tests/course-recovery.test.cjs (9995.484625ms)
+✔ billing diagnostics distinguish acknowledged reservations from a new unresolved request without exposing IDs or prices (5.447125ms)
+✔ connection diagnostics classify current safe API and storage messages using fixed enums (2.160209ms)
+✔ API diagnostic metadata is bounded and strictly allowlisted without ledger identities or provider content (13.552833ms)
+✔ allowlisted diagnostics remove credentials, course identity and content, handle absent/corrupt evidence and create a real ZIP (34.511834ms)
+✔ authenticated ZIP download works during learning and UI failures remain retryable (815.826ms)
+✔ Mac downloads use system HTTPS proxy with no inherited proxy variables (3241.815375ms)
+✔ disabled or malformed system proxies do not become download proxies (1066.948333ms)
+✔ explicit HTTPS or ALL proxy configuration keeps priority (23.955708ms)
+✔ loopback bypass preserves user exclusions and stays stable when sourced twice (86.490958ms)
+✔ a protocol fallback approves only this detection run and retains the failed probe reservation (19.131375ms)
+✔ an unmetered provider failure never permits automatic candidate retries during detection (9.321334ms)
+✔ detection accepts a response arriving after 30 seconds within a 120-second deadline (31028.778292ms)
+✔ tests/service-detection.test.mjs (62.134667ms)
+✔ malformed model lists and interrupted list bodies give safe service guidance without paid calls (10.764291ms)
+✔ only expendable detection caches are rebuilt; existing cost records stay byte-for-byte intact (6.072ms)
+✔ an unreadable cache is reported as a local storage problem before any provider call (0.695458ms)
+✔ missing, malformed or invalid detection costs block completion instead of reporting zero costs (12.01325ms)
+✔ service, detection budget, storage and accounting failures retain specific next steps (1.607083ms)
+✔ the real detect-save UI shows specific failures and recovers on retry after rebuilding a broken cache (852.556625ms)
+✔ download failure keeps the technical cause in a local file and tells the user how to start again (494.623375ms)
+✔ Mac installer recovers from the reported DNS timeout using a verified mirror download (1085.980166ms)
+✔ an incomplete package gives extraction steps instead of a Node stack trace (2030.810792ms)
+✔ beginner input accepts only course learning URLs, not lookalike or credential URLs (0.510416ms)
+✔ configuration validates key, budget, Responses model and three prices before saving (0.2615ms)
+✔ course URL and private paths are separate arguments, with no Key in child arguments (0.282333ms)
+✔ a second launcher is blocked and normal exit releases the lock (3.340583ms)
+✔ Windows permission denial recovers only when the old PID belongs to another program (2.211292ms)
+✔ the real launcher retains its local origin across a clean termination and restart (497.562334ms)
+✔ the reported ambiguous AI answer preserves progress and gives quiz recovery steps in course help and logs (672.6225ms)
+✔ a paused course tells beginners where to act and keeps technical diagnostics out of its page (470.134084ms)
+✔ settings, browser, costs, quizzes, check-in and unfamiliar failures all give persistent next steps (1513.745458ms)
+﹣ Windows installer supports Chinese, spaces and square brackets through download, components and restart (0.607833ms) # SKIP
+﹣ Windows checksum failure explains its stage and preserves a complete local error (0.03925ms) # SKIP
+﹣ Windows extraction failure reports the actual cause and releases the installer lock (0.032958ms) # SKIP
+﹣ Windows launcher finds and removes its ready file in a bracketed installation path (0.042375ms) # SKIP
+ℹ tests 239
+ℹ suites 0
+ℹ pass 221
+ℹ fail 14
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 402759.901208
+
+✖ failing tests:
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: paragraphs (2.549125ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: blocks (0.201125ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: multiple (0.038792ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: judgement (0.017708ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: numeric-key (0.020833ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: string-options (0.019458ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: reordered-model (0.016125ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: duplicate-text (0.035083ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: missing-value (0.034458ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: missing-key (0.0385ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: duplicate-key (0.0215ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: wrong-key (0.013875ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: duplicate-control-value (0.011958ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }
+
+test at tests/course-option-mapping.test.cjs:12:248
+✖ native option mapping: unsynced-model (0.010667ms)
+  browserType.launch: Executable doesn't exist at [HOME]/Library/Caches/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-mac-arm64/chrome-headless-shell
+  ╔════════════════════════════════════════════════════════════╗
+  ║ Looks like Playwright was just installed or updated.       ║
+  ║ Please run the following command to download new browsers: ║
+  ║                                                            ║
+  ║     npx playwright install                                 ║
+  ║                                                            ║
+  ║ <3 Playwright Team                                         ║
+  ╚════════════════════════════════════════════════════════════╝
+      at TestContext.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:47)
+      at Object.<anonymous> ([HOME]/Documents/ChatGPT/插件/szu-uooc/tests/course-option-mapping.test.cjs:9:1) {
+    name: 'Error',
+    log: []
+  }

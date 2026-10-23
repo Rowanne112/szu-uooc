@@ -1,0 +1,26 @@
+✖ the original browser course bridge keeps background timers and native video alive, then restores visibility on cleanup (5908.432833ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6085.799583
+
+✖ failing tests:
+
+test at tests/course-background.test.mjs:23:1
+✖ the original browser course bridge keeps background timers and native video alive, then restores visibility on cleanup (5908.432833ms)
+  AssertionError [ERR_ASSERTION]: Background fixture timed out: {"visibility":"hidden","focused":false,"ticks":6}
+      at waitFor (file://[HOME]/Documents/ChatGPT/project/szu-uooc/tests/course-background.test.mjs:20:10)
+      at async TestContext.<anonymous> (file://[HOME]/Documents/ChatGPT/project/szu-uooc/tests/course-background.test.mjs:40:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: undefined,
+    operator: 'fail',
+    diff: 'simple'
+  }

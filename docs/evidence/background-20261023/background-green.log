@@ -1,0 +1,10 @@
+Raw Chrome/noDefaults: background timers advance, real MP4 naturally ends, explicit pause survives, cleanup releases focus. No course platform or provider requests.
+✔ the original browser course bridge keeps background timers and native video alive, then restores visibility on cleanup (4244.494125ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4421.427041

@@ -105,8 +105,12 @@ export async function installCourseScript(target, { config, bank, script, expect
     } finally { await node.dispose(); }
   });
 
-  let injection;
-  try { injection = await target.addInitScript({ content: `
+  let injection, focus;
+  try {
+    focus = await target.context().newCDPSession(target);
+    // The original-browser connection skips Playwright's focus override; keep only this course running in the background.
+    await focus.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    injection = await target.addInitScript({ content: `
 if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.online)$/.test(location.hostname) && /^\\/home\\/learn\\//.test(location.pathname) && location.hash.replace(/^#\\/?/, '').split('/')[0] === ${JSON.stringify(expectedCourse)}) {
   (() => {
     const values = { 'szu-uooc:ai-api-key': '[managed-by-local-controller]', 'szu-uooc:answer-bank': ${JSON.stringify(bank)} };
@@ -128,6 +132,9 @@ if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.on
     ${consoleMode ? "const hide = () => { const style = document.createElement('style'); style.textContent = '#szu-uooc-auto-player-controls{display:none!important}'; document.head.appendChild(style); }; if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hide, {once:true}); else hide();" : ''}
   })();
 }` }); }
-  catch (error) { await imageBinding.dispose(); await binding.dispose(); throw error; }
-  return async () => { try { await injection.dispose(); } finally { await imageBinding.dispose(); await binding.dispose(); } };
+  catch (error) { await focus?.detach().catch(() => {}); await imageBinding.dispose(); await binding.dispose(); throw error; }
+  return async () => {
+    try { await injection.dispose(); }
+    finally { try { await imageBinding.dispose(); await binding.dispose(); } finally { await focus.detach().catch(() => {}); } }
+  };
 }

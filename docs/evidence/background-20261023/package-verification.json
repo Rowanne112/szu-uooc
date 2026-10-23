@@ -1,0 +1,19 @@
+{
+  "tag": "v0.1.22",
+  "base_commit": "303849abcf4bbfd2cb519b823df52082ce1072cb",
+  "build": "0.10.0-local.34",
+  "bytes": 236213,
+  "sha256": "9a6f2a7d5f577941300d38ff8247730b010fdbb4d9b1ffe32cbec8154328f9a2",
+  "manifest_verified": 34,
+  "runtime_changes_from_v0_1_21": [
+    "app/browser-bridge.mjs",
+    "app/szu-uooc.user.js"
+  ],
+  "retained_project_notice": true,
+  "prior_regression": {
+    "total": 240,
+    "passed": 236,
+    "skipped": 4
+  },
+  "verified_display_off_seconds": 3.696
+}

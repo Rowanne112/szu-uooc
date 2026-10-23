@@ -1,0 +1,8 @@
+{
+  "startup": true,
+  "authenticated_local_state": true,
+  "no_course_started": true,
+  "no_user_settings_used": true,
+  "clean_shutdown": true,
+  "zip_sha256": "9a6f2a7d5f577941300d38ff8247730b010fdbb4d9b1ffe32cbec8154328f9a2"
+}
