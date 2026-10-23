@@ -104,6 +104,7 @@ async function main() {
   }
   const consoleApp = await createConsole({ appDir, dataDir });
   consoleApp.server.once('close', release);
+  console.log('个人编程学习与技术探索项目；请遵守学校及平台规定，不支持用脚本代替本人完成学习、测验或签到。');
   console.log('szu-uooc 控制台已打开。按页面指引选择并连接浏览器，读取课程或停止运行。');
   console.log(consoleApp.url);
   await saveAddress();

@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         szu-uooc
 // @namespace    szu-uooc.local
-// @version      0.10.0-local.33
-// @description  UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
+// @version      0.10.0-local.33.1
+// @description  个人编程学习与技术探索项目，仅供学习交流与经授权的安全研究；UOOC视频与章节测验连续调度，标准答案和缓存优先、Luna补缺；配合本地Chrome控制器使用网站原生验证与提交流程，保留题目导出、长截图和手动AI参考。
 // @tag          uooc
 // @require      https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
 // @author       Liunian06
@@ -30,6 +30,12 @@
 // @connect      *
 // ==/UserScript==
 
+// 关于项目使用的说明
+// 本项目是我出于编程学习与技术探索开发的个人项目，仅供学习交流与经授权的安全研究。
+// 我不鼓励任何利用脚本代替本人完成课程学习、测验、签到等违反学校及平台规定的行为，也不支持将本项目用于此类用途。
+// 如发现平台安全问题，请通过学校及平台的正式渠道反馈；希望学校与平台持续完善安全机制、及时修复相关问题。
+// 请大家遵守学校及课程平台的相关规定，合理使用技术。
+
 (function () {
   'use strict';
 
@@ -44,7 +50,7 @@
   const pageWindow = typeof unsafeWindow !== 'undefined' ? unsafeWindow : window;
   if (pageWindow.__szuUoocRunnerInstalled) return;
   pageWindow.__szuUoocRunnerInstalled = true;
-  const SCRIPT_VERSION = '0.10.0-local.33';
+  const SCRIPT_VERSION = '0.10.0-local.33.1';
   const LOG_PREFIX = '[szu-uooc v' + SCRIPT_VERSION + ']';
   const CONFIG_KEY = 'szu-uooc:auto-player:config';
   // Carry over progress and unresolved submissions when upgrading the local controller.
@@ -4654,7 +4660,7 @@
       '.szu-uooc-auto-player-collapse{display:inline-flex;align-items:center;justify-content:center;width:30px!important;height:30px!important;padding:0!important;border:0!important;border-radius:50%!important;background:transparent!important;color:var(--panel-muted)!important;font-size:0!important;line-height:1!important;transition:background .18s ease,color .18s ease,transform .18s ease!important}',
       '.szu-uooc-auto-player-collapse:hover{background:var(--button-bg)!important;color:var(--panel-text)!important;transform:none!important}',
       '.szu-uooc-auto-player-collapse svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s ease}',
-      '.szu-uooc-auto-player-body{display:flex;flex-direction:column;gap:10px;padding:10px 13px 13px;border-top:1px solid var(--panel-border)}',
+      '.szu-uooc-auto-player-body{display:flex;flex-direction:column;gap:10px;padding:10px 13px 13px;border-top:1px solid var(--panel-border);max-height:calc(100dvh - 100px);overflow-y:auto}',
       '.szu-uooc-auto-player-actions{display:flex;flex-direction:column;gap:5px}',
       '#szu-uooc-auto-player-controls button{cursor:pointer;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}',
       '.szu-uooc-auto-player-toggle-row{display:flex!important;align-items:center;justify-content:space-between;width:100%!important;height:38px!important;border:0!important;border-radius:10px!important;padding:0 9px 0 11px!important;background:transparent!important;color:var(--panel-text)!important;cursor:pointer;font:600 12px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important;text-align:left;transform:none!important}',
@@ -4746,6 +4752,7 @@
         '</div>',
         '</div>',
         '<div class="szu-uooc-auto-player-body">',
+        '<details><summary>关于项目使用的说明</summary><p>本项目是我出于编程学习与技术探索开发的个人项目，仅供学习交流与经授权的安全研究。</p><p>我不鼓励任何利用脚本代替本人完成课程学习、测验、签到等违反学校及平台规定的行为，也不支持将本项目用于此类用途。</p><p>如发现平台安全问题，请通过学校及平台的正式渠道反馈；希望学校与平台持续完善安全机制、及时修复相关问题。</p><p>请大家遵守学校及课程平台的相关规定，合理使用技术。</p></details>',
         '<span class="szu-uooc-auto-player-state" data-role="state"></span>',
         '<div class="szu-uooc-auto-assessment-actions"><button data-action="course-start" type="button">启动当前课程</button><button data-action="course-stop" type="button">停止</button></div>',
         '<div class="szu-uooc-auto-player-actions">',
