@@ -93,11 +93,11 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
       return;
     }
     const target = 'https://www.uooc.net.cn/home/index';
-    if (getBrowserKind() === 'firefox') {
-      // Open the site inside the automation window so the login lands in the
-      // dedicated profile the session actually reads from.
+    // Prefer the already-connected window (Edge/Chrome CDP or Firefox automation).
+    // Spawning a second process with the same profile forces a new login.
+    if (getBrowserKind() === 'firefox' || browser?.isConnected()) {
       const session = await get(), context = session.contexts()[0];
-      if (!context) throw new Error(`没有找到 ${name()} 自动化窗口。`);
+      if (!context) throw new Error(`没有找到已登录的 ${name()} 窗口。`);
       const page = await context.newPage();
       try { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
       catch (error) { await page.close().catch(() => {}); throw error; }
