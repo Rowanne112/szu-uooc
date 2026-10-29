@@ -106,9 +106,10 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
     if (getBrowserKind() === 'firefox' || browser?.isConnected()) {
       const session = await get(), context = session.contexts()[0];
       if (!context) throw new Error(`没有找到已登录的 ${name()} 窗口。`);
-      const page = await context.newPage();
-      try { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
-      catch (error) { await page.close().catch(() => {}); throw error; }
+      let page = context.pages().find(p => { try { return allowedHost(new URL(p.url()).hostname); } catch { return false; } }) || context.pages()[0];
+      if (!page) page = await context.newPage();
+      await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.bringToFront();
       return;
     }
     const info = await discoverBrowser({ kind: getBrowserKind() });
@@ -148,10 +149,18 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
       let owned = false;
       if (!page || /\/home\/course\//.test(new URL(page.url()).pathname)) {
         const existing = context.pages().find(p => { try { return allowedHost(new URL(p.url()).hostname); } catch { return false; } });
-        page = await context.newPage(); owned = true;
-        await page.goto(new URL('/home/index', existing?.url() || 'https://www.uooc.net.cn/').href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        if (getBrowserKind() === 'firefox') {
+          page = existing || context.pages()[0];
+          if (!page) page = await context.newPage();
+          await page.goto(new URL('/home/index', existing?.url() || 'https://www.uooc.net.cn/').href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+          await page.bringToFront();
+        } else {
+          page = await context.newPage(); owned = true;
+          await page.goto(new URL('/home/index', existing?.url() || 'https://www.uooc.net.cn/').href, { waitUntil: 'domcontentloaded', timeout: 30000 });
+        }
       }
       try {
+        if (/\/user\/login|\/passport\/login/.test(page.url())) throw new Error(`请先在当前 ${name()} 窗口登录优课网，登录完成后不要关窗口，再点「读取课程」。`);
         await page.waitForFunction(() => document.querySelector('a[href*="/home/course/"],a[href*="/home/learn/"],[ng-repeat*="course"],[ng-repeat*="Course"]'), null, { timeout: 15000 }).catch(() => {});
         await observeCatalog(page);
         const found = await page.evaluate(() => {
