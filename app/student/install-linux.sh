@@ -43,4 +43,10 @@ else
   echo "npm 依赖已安装"
 fi
 
+# Firefox support drives Playwright's bundled build (Firefox has no CDP endpoint).
+if ! ls "$HOME/.cache/ms-playwright"/firefox-* >/dev/null 2>&1; then
+  echo "[2/3] 下载 Firefox 自动化组件……"
+  (cd "$PWD/app" && "$node" node_modules/playwright/cli.js install firefox)
+fi
+
 echo "Linux 安装完成"

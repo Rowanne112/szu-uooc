@@ -42,9 +42,24 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
   async function get() {
     if (browser?.isConnected()) return browser;
     if (connecting) return connecting;
-    status.status = 'connecting'; status.message = `在 ${name()} 中允许连接`; status.error = '';
+    status.status = 'connecting'; status.message = getBrowserKind() === 'firefox' ? '正在启动 Firefox 自动化窗口' : `在 ${name()} 中允许连接`; status.error = '';
     connecting = (async () => {
       if (connectBrowser) browser = await connectBrowser();
+      else if (getBrowserKind() === 'firefox') {
+        // Firefox has no CDP endpoint; drive Playwright's bundled build with a dedicated
+        // profile so the user's real profile is never touched by automation.
+        const require = createRequire(path.join(appDir, 'package.json'));
+        const { firefox } = require('playwright');
+        const context = await firefox.launchPersistentContext(path.join(dataDir, 'firefox-profile'), { headless: false, viewport: null });
+        let closed = false;
+        context.once('close', () => { closed = true; });
+        browser = {
+          contexts: () => closed ? [] : [context],
+          isConnected: () => !closed,
+          close: async () => { if (!closed) { closed = true; await context.close().catch(() => {}); } },
+          once: (event, listener) => { if (event === 'disconnected') context.once('close', listener); },
+        };
+      }
       else {
         const require = createRequire(path.join(appDir, 'package.json'));
         const { chromium } = require('playwright');
