@@ -67,6 +67,13 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
           Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
         });
         if (cookies.length) await context.addCookies(cookies);
+        const home = context.pages()[0] || await context.newPage();
+        try {
+          await home.goto('https://www.uooc.net.cn/home/index', { waitUntil: 'domcontentloaded', timeout: 45000 });
+          await home.bringToFront();
+        } catch (error) {
+          log('Firefox 打开优课网失败：' + String(error.message).slice(0, 240));
+        }
         let closed = false;
         context.once('close', () => { closed = true; });
         browser = {
