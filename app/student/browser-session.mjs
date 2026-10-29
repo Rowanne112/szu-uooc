@@ -6,7 +6,7 @@ import { allowedHost } from '../browser-bridge.mjs';
 import { runController } from '../controller.mjs';
 import { connectOriginalChrome } from '../chrome-connection.mjs';
 import { validateCourseURL } from './settings.mjs';
-import { discoverChrome, openCheckinPages, checkinURL, activateChromeProcess, browserTypes } from './checkin-browser.mjs';
+import { discoverChrome, openCheckinPages, checkinURL, activateChromeProcess, browserTypes, importFirefoxSession, firefoxCookiesFromProfile } from './checkin-browser.mjs';
 
 export function courseFromURL(value) {
   let url;
@@ -42,15 +42,23 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
   async function get() {
     if (browser?.isConnected()) return browser;
     if (connecting) return connecting;
-    status.status = 'connecting'; status.message = getBrowserKind() === 'firefox' ? '正在启动 Firefox 自动化窗口' : `在 ${name()} 中允许连接`; status.error = '';
+    status.status = 'connecting'; status.message = getBrowserKind() === 'firefox' ? '正在打开 Firefox 自动化窗口（会尝试导入个人配置中的优课网登录）' : `在 ${name()} 中允许连接`; status.error = '';
     connecting = (async () => {
       if (connectBrowser) browser = await connectBrowser();
       else if (getBrowserKind() === 'firefox') {
-        // Firefox has no CDP endpoint; drive Playwright's bundled build with a dedicated
-        // profile so the user's real profile is never touched by automation.
+        // Firefox has no CDP attach (unlike Chrome/Edge). Launch Playwright's bundled
+        // Firefox with a dedicated profile, then copy cookies/localStorage from the
+        // user's real profile so an existing UOOC login is reused. The live personal
+        // profile is never opened or written.
         const require = createRequire(path.join(appDir, 'package.json'));
         const { firefox } = require('playwright');
-        const context = await firefox.launchPersistentContext(path.join(dataDir, 'firefox-profile'), { headless: false, viewport: null });
+        const dest = path.join(dataDir, 'firefox-profile');
+        const info = await discoverBrowser({ kind: 'firefox' });
+        const profileDirectory = info.lastUsedProfile || info.profiles[0]?.directory;
+        if (profileDirectory) await importFirefoxSession(info.userDataDir, dest, profileDirectory);
+        const cookies = profileDirectory ? await firefoxCookiesFromProfile(info.userDataDir, profileDirectory) : [];
+        const context = await firefox.launchPersistentContext(dest, { headless: false, viewport: null });
+        if (cookies.length) await context.addCookies(cookies);
         let closed = false;
         context.once('close', () => { closed = true; });
         browser = {

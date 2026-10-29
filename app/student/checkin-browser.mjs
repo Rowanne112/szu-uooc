@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import { spawn, execFile } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { allowedHost } from '../browser-bridge.mjs';
 
 export const checkinMarker = 'szu_checkin';
@@ -64,12 +65,13 @@ export async function discoverBrowser({ kind = 'chrome', platform = process.plat
       const ini = await fs.readFile(path.join(userDataDir, 'profiles.ini'), 'utf8');
       profiles = [...ini.matchAll(/\[Profile\d+\]([^\[]*)/g)].map(match => match[1]).map(block => {
         const name = block.match(/^Name=(.*)$/m)?.[1]?.trim();
-        const relative = block.match(/^IsRelative=1$/m);
+        const relative = !block.match(/^IsRelative=0$/m);
         const directory = block.match(/^Path=(.*)$/m)?.[1]?.trim();
-        return relative && directory && /^[a-zA-Z0-9 ._-]{1,80}$/.test(directory) ? { directory, name: (name || directory).slice(0, 120) } : null;
+        const isDefault = /^Default=1$/m.test(block);
+        return relative && directory && /^[a-zA-Z0-9 ._-]{1,80}$/.test(directory) ? { directory, name: (name || directory).slice(0, 120), isDefault } : null;
       }).filter(Boolean);
     } catch {}
-    return { ...info, installed: true, available: true, executable, userDataDir: await fs.realpath(userDataDir).catch(() => userDataDir), profiles, lastUsedProfile: profiles[0]?.directory || '' };
+    return { ...info, installed: true, available: true, executable, userDataDir: await fs.realpath(userDataDir).catch(() => userDataDir), profiles, lastUsedProfile: profiles.find(p => p.isDefault)?.directory || profiles[0]?.directory || '' };
   }
   try {
     // Read profile names only. Never read cookies, passwords or browsing history.
@@ -80,6 +82,58 @@ export async function discoverBrowser({ kind = 'chrome', platform = process.plat
   } catch { return { ...info, installed: true, error: `请先打开 ${info.name} 创建用户资料，并登录课程网站，再刷新控制台。` }; }
 }
 export const discoverChrome = discoverBrowser;
+
+export async function importFirefoxSession(userDataDir, destDir, profileDirectory) {
+  if (!userDataDir || !destDir || !/^[a-zA-Z0-9 ._-]{1,80}$/.test(profileDirectory || '')) return false;
+  const src = path.join(userDataDir, profileDirectory);
+  const stat = await fs.stat(src).catch(() => null);
+  if (!stat?.isDirectory()) return false;
+  await fs.mkdir(destDir, { recursive: true, mode: 0o700 });
+  // Do not overwrite an existing automation cookie jar — that would drop a
+  // login already completed in the Playwright window.
+  const hasJar = await fs.stat(path.join(destDir, 'cookies.sqlite')).catch(() => null);
+  if (!hasJar) {
+    for (const name of ['cookies.sqlite', 'cookies.sqlite-wal', 'cookies.sqlite-shm', 'key4.db', 'cert9.db', 'permissions.sqlite']) {
+      await fs.copyFile(path.join(src, name), path.join(destDir, name)).catch(() => {});
+    }
+  }
+  const storageSrc = path.join(src, 'storage', 'default');
+  const storageDst = path.join(destDir, 'storage', 'default');
+  const entries = await fs.readdir(storageSrc).catch(() => []);
+  if (!entries.length) return true;
+  await fs.mkdir(storageDst, { recursive: true, mode: 0o700 });
+  for (const entry of entries) {
+    if (!/uooc/i.test(entry)) continue;
+    await fs.cp(path.join(storageSrc, entry), path.join(storageDst, entry), { recursive: true, force: true }).catch(() => {});
+  }
+  return true;
+}
+
+export async function firefoxCookiesFromProfile(userDataDir, profileDirectory) {
+  if (!userDataDir || !/^[a-zA-Z0-9 ._-]{1,80}$/.test(profileDirectory || '')) return [];
+  const src = path.join(userDataDir, profileDirectory);
+  const temp = path.join(os.tmpdir(), 'szu-uooc-ff-cookies-' + process.pid);
+  await fs.mkdir(temp, { recursive: true, mode: 0o700 });
+  try {
+    for (const name of ['cookies.sqlite', 'cookies.sqlite-wal', 'cookies.sqlite-shm']) {
+      await fs.copyFile(path.join(src, name), path.join(temp, name)).catch(() => {});
+    }
+    const db = new DatabaseSync(path.join(temp, 'cookies.sqlite'), { readOnly: true });
+    try {
+      const rows = db.prepare('SELECT host, name, value, path, expiry, isSecure, isHttpOnly, sameSite FROM moz_cookies WHERE originAttributes = \'\'').all();
+      return rows.flatMap(row => {
+        if (typeof row.host !== 'string' || typeof row.name !== 'string' || typeof row.value !== 'string') return [];
+        if (!row.host.endsWith('uooc.net.cn') && !row.host.endsWith('uoocuniversity.com') && !row.host.endsWith('szu.edu.cn')) return [];
+        const expiry = Number(row.expiry);
+        let expires = -1;
+        if (Number.isFinite(expiry) && expiry > 0) expires = expiry > 1e15 ? Math.floor(expiry / 1e6) : expiry > 1e12 ? Math.floor(expiry / 1000) : expiry;
+        const sameSite = row.sameSite === 2 ? 'Strict' : 'Lax';
+        return [{ name: row.name, value: row.value, domain: row.host, path: row.path || '/', expires, httpOnly: Boolean(row.isHttpOnly), secure: Boolean(row.isSecure), sameSite }];
+      });
+    } finally { db.close(); }
+  } catch { return []; }
+  finally { await fs.rm(temp, { recursive: true, force: true }).catch(() => {}); }
+}
 
 export function browserCommand(urls, browser) {
   // Firefox takes profile flags differently; just open a window in the default profile.
