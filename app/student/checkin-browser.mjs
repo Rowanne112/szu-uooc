@@ -41,7 +41,11 @@ export async function discoverBrowser({ kind = 'chrome', platform = process.plat
   } else if (platform === 'win32') {
     candidates = [env.LOCALAPPDATA, env.ProgramFiles, env['ProgramFiles(x86)']].filter(Boolean).map(root => path.join(root, folder, 'Application', binary));
     userDataDir = env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, folder, 'User Data');
-  } else return { ...info, error: '目前支持 Windows 和 macOS 的 Chrome / Edge。' };
+  } else if (platform === 'linux') {
+    const names = kind === 'edge' ? ['microsoft-edge', 'microsoft-edge-stable', '/opt/microsoft/msedge/microsoft-edge'] : ['google-chrome', 'google-chrome-stable', '/opt/google/chrome/chrome'];
+    candidates = names.flatMap(name => path.isAbsolute(name) ? [name] : ['/usr/bin', '/usr/local/bin'].map(root => path.join(root, name)));
+    userDataDir = path.join(home, '.config', kind === 'edge' ? 'microsoft-edge' : 'google-chrome');
+  } else return { ...info, error: '目前支持 Windows、macOS 和 Linux 的 Chrome / Edge。' };
   const executable = (await Promise.all(candidates.map(async file => await fs.stat(file).catch(() => null) ? file : null))).find(Boolean);
   if (!executable || !userDataDir) return { ...info, error: `未找到 ${app}，请先安装并登录课程网站。` };
   try {
