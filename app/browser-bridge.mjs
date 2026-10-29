@@ -114,9 +114,14 @@ export async function installCourseScript(target, { config, bank, script, expect
 
   let injection, focus;
   try {
-    focus = await target.context().newCDPSession(target);
-    // The original-browser connection skips Playwright's focus override; keep only this course running in the background.
-    await focus.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    try {
+      focus = await target.context().newCDPSession(target);
+      // The original-browser connection skips Playwright's focus override; keep only this course running in the background.
+      await focus.send('Emulation.setFocusEmulationEnabled', { enabled: true });
+    } catch (error) {
+      if (!/CDP session is only available in Chromium/i.test(error.message)) throw error;
+      focus = null;
+    }
     injection = await target.addInitScript({ content: `
 if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.online)$/.test(location.hostname) && /^\\/home\\/learn\\//.test(location.pathname) && location.hash.replace(/^#\\/?/, '').split('/')[0] === ${JSON.stringify(expectedCourse)}) {
   (() => {
@@ -142,6 +147,6 @@ if (window === window.top && /(^|\\.)(uooc\\.net\\.cn|uooconline\\.com|uooc\\.on
   catch (error) { await focus?.detach().catch(() => {}); await imageBinding.dispose(); await binding.dispose(); throw error; }
   return async () => {
     try { await injection.dispose(); }
-    finally { try { await imageBinding.dispose(); await binding.dispose(); } finally { await focus.detach().catch(() => {}); } }
+    finally { try { await imageBinding.dispose(); await binding.dispose(); } finally { await focus?.detach().catch(() => {}); } }
   };
 }

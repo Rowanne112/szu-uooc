@@ -222,7 +222,7 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
         if (owned || page.url() !== learning) await page.goto(learning, { waitUntil: 'domcontentloaded', timeout: 60000 });
         await runController({ args: workerArgs, browser: session, page, commands, initialCommand: pending, observePage: observeCourse, fetchAPI: requestFetch, verify,
           focusBrowser: async () => {
-            if (process.platform !== 'darwin') return;
+            if (process.platform !== 'darwin' || getBrowserKind() === 'firefox') return;
             const control = await session.newBrowserCDPSession();
             try { const { processInfo } = await control.send('SystemInfo.getProcessInfo'); await activateBrowser(processInfo.find(item => item.type === 'browser')?.id); }
             finally { await control.detach(); }
