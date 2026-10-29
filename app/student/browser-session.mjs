@@ -84,10 +84,20 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
       catch (error) { await page.close().catch(() => {}); throw error; }
       return;
     }
+    const target = 'https://www.uooc.net.cn/home/index';
+    if (getBrowserKind() === 'firefox') {
+      // Open the site inside the automation window so the login lands in the
+      // dedicated profile the session actually reads from.
+      const session = await get(), context = session.contexts()[0];
+      if (!context) throw new Error(`没有找到 ${name()} 自动化窗口。`);
+      const page = await context.newPage();
+      try { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 30000 }); }
+      catch (error) { await page.close().catch(() => {}); throw error; }
+      return;
+    }
     const info = await discoverBrowser({ kind: getBrowserKind() });
     if (!info.available) throw new Error(info.error);
     const profileDirectory = info.lastUsedProfile || info.profiles[0]?.directory;
-    const target = 'https://www.uooc.net.cn/home/index';
     const results = await openPages([target], { ...info, profileDirectory });
     if (!results[0]?.ok) throw new Error(results[0]?.error || `${name()} 没有打开。`);
   }
