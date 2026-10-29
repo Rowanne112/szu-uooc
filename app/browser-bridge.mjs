@@ -51,6 +51,13 @@ export async function clickVerificationControl(page, frame, beforeClick) {
   const size = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   if (!box || box.x < 0 || box.y < 0 || box.x + box.width > size.width || box.y + box.height > size.height) throw new Error('验证控件不在课程视口内，未发送点击');
   if (beforeClick && !await beforeClick()) return false;
+  const firefox = await page.evaluate(() => /Firefox/i.test(navigator.userAgent));
+  if (firefox) {
+    // Aliyun's smart captcha rejects Playwright Firefox synthetic clicks and then loops.
+    await page.bringToFront();
+    await checkbox.waitFor({ state: 'hidden', timeout: 120000 });
+    return true;
+  }
   // Native input must not wait for a target to reappear after the cancellation check.
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   return true;

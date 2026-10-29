@@ -57,7 +57,15 @@ export function createBrowserSession({ appDir, dataDir, connectBrowser, discover
         const profileDirectory = info.lastUsedProfile || info.profiles[0]?.directory;
         if (profileDirectory) await importFirefoxSession(info.userDataDir, dest, profileDirectory);
         const cookies = profileDirectory ? await firefoxCookiesFromProfile(info.userDataDir, profileDirectory) : [];
-        const context = await firefox.launchPersistentContext(dest, { headless: false, viewport: null });
+        const context = await firefox.launchPersistentContext(dest, {
+          headless: false,
+          viewport: null,
+          firefoxUserPrefs: { 'dom.webdriver.enabled': false },
+        });
+        await context.addInitScript(() => {
+          try { delete Object.getPrototypeOf(navigator).webdriver; } catch {}
+          Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        });
         if (cookies.length) await context.addCookies(cookies);
         let closed = false;
         context.once('close', () => { closed = true; });

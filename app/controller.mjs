@@ -420,7 +420,7 @@ try {
             };
             try {
               const clicked = options.verify ? await options.verify(click, { page, state }) : await click();
-              if (clicked) { verificationClickFailures = 0; report('已点击原生验证控件；继续等待网站确认。若出现额外挑战，请在 浏览器 接管。'); }
+              if (clicked) { verificationClickFailures = 0; report('验证已提交，继续等待网站确认。若仍停在验证页，请在浏览器窗口内手动完成智能验证。'); }
             } catch (error) {
               if (!stopping && !userPaused) {
                 verificationClickFailures++;
