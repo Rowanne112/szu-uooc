@@ -31,7 +31,7 @@ export function checkinURL(value, marked = false) {
 }
 
 export async function discoverBrowser({ kind = 'chrome', platform = process.platform, home = os.homedir(), env = process.env } = {}) {
-  if (!Object.hasOwn(browserTypes, kind)) throw new Error('请选择 Chrome 或 Edge。');
+  if (!Object.hasOwn(browserTypes, kind)) throw new Error('请选择 Chrome、Edge 或 Firefox。');
   const info = { kind, ...browserTypes[kind], installed: false, available: false, profiles: [] };
   const app = kind === 'edge' ? 'Microsoft Edge' : kind === 'firefox' ? 'Firefox' : 'Google Chrome';
   const folder = kind === 'edge' ? 'Microsoft/Edge' : 'Google/Chrome';
@@ -84,36 +84,15 @@ export async function discoverBrowser({ kind = 'chrome', platform = process.plat
 export const discoverChrome = discoverBrowser;
 
 export async function importFirefoxSession(userDataDir, destDir, profileDirectory) {
-  if (!userDataDir || !destDir || !/^[a-zA-Z0-9 ._-]{1,80}$/.test(profileDirectory || '')) return false;
-  const src = path.join(userDataDir, profileDirectory);
-  const stat = await fs.stat(src).catch(() => null);
-  if (!stat?.isDirectory()) return false;
-  await fs.mkdir(destDir, { recursive: true, mode: 0o700 });
-  // Do not overwrite an existing automation cookie jar — that would drop a
-  // login already completed in the Playwright window.
-  const hasJar = await fs.stat(path.join(destDir, 'cookies.sqlite')).catch(() => null);
-  if (!hasJar) {
-    for (const name of ['cookies.sqlite', 'cookies.sqlite-wal', 'cookies.sqlite-shm', 'key4.db', 'cert9.db', 'permissions.sqlite']) {
-      await fs.copyFile(path.join(src, name), path.join(destDir, name)).catch(() => {});
-    }
-  }
-  const storageSrc = path.join(src, 'storage', 'default');
-  const storageDst = path.join(destDir, 'storage', 'default');
-  const entries = await fs.readdir(storageSrc).catch(() => []);
-  if (!entries.length) return true;
-  await fs.mkdir(storageDst, { recursive: true, mode: 0o700 });
-  for (const entry of entries) {
-    if (!/uooc/i.test(entry)) continue;
-    await fs.cp(path.join(storageSrc, entry), path.join(storageDst, entry), { recursive: true, force: true }).catch(() => {});
-  }
-  return true;
+  // An existing automation profile owns its login and pending submissions.
+  if (!destDir || await fs.stat(destDir).catch(() => null)) return [];
+  return firefoxCookiesFromProfile(userDataDir, profileDirectory);
 }
 
 export async function firefoxCookiesFromProfile(userDataDir, profileDirectory) {
-  if (!userDataDir || !/^[a-zA-Z0-9 ._-]{1,80}$/.test(profileDirectory || '')) return [];
+  if (!userDataDir || !/^[a-zA-Z0-9 ._-]{1,80}$/.test(profileDirectory || '') || ['.', '..'].includes(profileDirectory)) return [];
   const src = path.join(userDataDir, profileDirectory);
-  const temp = path.join(os.tmpdir(), 'szu-uooc-ff-cookies-' + process.pid);
-  await fs.mkdir(temp, { recursive: true, mode: 0o700 });
+  const temp = await fs.mkdtemp(path.join(os.tmpdir(), 'szu-uooc-ff-cookies-'));
   try {
     for (const name of ['cookies.sqlite', 'cookies.sqlite-wal', 'cookies.sqlite-shm']) {
       await fs.copyFile(path.join(src, name), path.join(temp, name)).catch(() => {});
@@ -123,7 +102,8 @@ export async function firefoxCookiesFromProfile(userDataDir, profileDirectory) {
       const rows = db.prepare('SELECT host, name, value, path, expiry, isSecure, isHttpOnly, sameSite FROM moz_cookies WHERE originAttributes = \'\'').all();
       return rows.flatMap(row => {
         if (typeof row.host !== 'string' || typeof row.name !== 'string' || typeof row.value !== 'string') return [];
-        if (!row.host.endsWith('uooc.net.cn') && !row.host.endsWith('uoocuniversity.com') && !row.host.endsWith('szu.edu.cn')) return [];
+        const host = row.host.replace(/^\./, '');
+        if (!allowedHost(host) && !/(^|\.)(uoocuniversity\.com|szu\.edu\.cn)$/.test(host)) return [];
         const expiry = Number(row.expiry);
         let expires = -1;
         if (Number.isFinite(expiry) && expiry > 0) expires = expiry > 1e15 ? Math.floor(expiry / 1e6) : expiry > 1e12 ? Math.floor(expiry / 1000) : expiry;
